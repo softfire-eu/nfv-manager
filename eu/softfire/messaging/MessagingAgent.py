@@ -3,6 +3,7 @@ from concurrent import futures
 import grpc
 import time
 
+from eu.softfire.core.NfvManager import list_resources, provide_resources, release_resources
 from eu.softfire.messaging.grpc import messages_pb2_grpc, messages_pb2
 from eu.softfire.utils.utils import get_logger, get_config
 
@@ -72,11 +73,11 @@ class ManagerAgent(messages_pb2_grpc.ManagerAgentServicer):
                 return messages_pb2.ResponseMessage(result=2, error_message=e)
 
     def list_resources(self, payload=None):
-        resources = [messages_pb2.ResourceMetadata("name", "descriprion", 1)]
+        resources = list_resources(payload)
         return messages_pb2.ListResourceResponse(resources=resources)
 
     def provide_resources(self, payload=None):
-        return messages_pb2.ProvideResourceResponse(resources="")
+        return provide_resources(payload)
 
     def release_resources(self, payload=None):
-        pass
+        release_resources(payload)
