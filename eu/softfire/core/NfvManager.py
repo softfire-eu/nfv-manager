@@ -4,8 +4,9 @@ from org.openbaton.cli.agents.agents import OpenBatonAgentFactory
 from org.openbaton.cli.openbaton import LIST_PRINT_KEY
 
 from eu.softfire.messaging.grpc import messages_pb2
-from eu.softfire.utils.utils import get_config
+from eu.softfire.utils.utils import get_config, get_logger
 
+logger = get_logger('eu.softfire.core')
 config = get_config()
 agent = OpenBatonAgentFactory(nfvo_ip=config.get("nfvo", "ip"),
                               nfvo_port=config.get("nfvo", "port"),

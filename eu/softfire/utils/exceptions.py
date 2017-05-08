@@ -1,0 +1,3 @@
+
+class OpenstackClientError(Exception):
+    pass

@@ -27,7 +27,9 @@ setup(
     install_requires=[
         'asyncio',
         'grpcio',
-        'openbaton-cli'
+        'openbaton-cli',
+        'python-keystoneclient',
+        'python-neutronclient',
     ],
     long_description=read('README.rst'),
     classifiers=[
