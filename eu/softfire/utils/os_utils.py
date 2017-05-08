@@ -85,7 +85,8 @@ def _create_single_project(tenant_name, testbed, testbed_name):
         )
         raise OpenstackClientError("A shared External Network called softfire-network must exist! "
                                    "Please create one in your openstack instance")
-    logger.debug("Created Network %s, Subnet %s, Router %s" % create_networks_and_subnets(neutron, ext_net))
+    networks, subnets, router_id = create_networks_and_subnets(neutron, ext_net)
+    logger.debug("Created Network %s, Subnet %s, Router %s" % (networks, subnets, router_id))
     fips = testbed.get("allocate-fip")
     if fips is not None and int(fips) > 0:
         allocate_floating_ips(neutron, int(fips), ext_net)
@@ -129,7 +130,11 @@ def import_keypair(nova):
     return nova.keypairs.create(**kargs)
 
 
-def create_networks_and_subnets(neutron, ext_net, router_name='ob_router'):
+def get_username_hash(username):
+    return abs(hash(username))
+
+
+def create_networks_and_subnets(neutron, ext_net, username, router_name='ob_router'):
     networks = []
     subnets = []
     ports = []
@@ -152,7 +157,7 @@ def create_networks_and_subnets(neutron, ext_net, router_name='ob_router'):
             'subnets': [
                 {
                     'name': "subnet_%s" % net,
-                    'cidr': "192.168.%s.0/24" % index,
+                    'cidr': "192.%s.%s.0/24" % ((get_username_hash(username) % 254) + 1, index),
                     'gateway_ip': '192.168.%s.1' % index,
                     'ip_version': '4',
                     'enable_dhcp': True,
