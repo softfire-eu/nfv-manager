@@ -34,6 +34,9 @@ def list_resources(payload, user_info):
     project_id = _get_project_id(user_info)
 
     result = []
+    if not project_id:
+        logger.debug("No result without a user info")
+        return result
     for nsd in agent.get_agent("nsd", project_id=project_id).find():
         result.append(messages_pb2.ResourceMetadata(nsd.name, nsd.get('description') or DESCRIPTIONS[nsd.name.lower()],
                                                     CARDINALITY[nsd.name.lower()]))
@@ -43,6 +46,7 @@ def list_resources(payload, user_info):
 
 def _get_project_id(user_info):
     project_agent = agent.get_project_agent()
+    project_id = None
     for project in project_agent.find():
         if project.name == user_info.name:
             project_id = project.id
