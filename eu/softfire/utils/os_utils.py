@@ -61,7 +61,8 @@ def _create_single_project(tenant_name, testbed, testbed_name):
             logger.warn("returning tenant id %s" % tenant.id)
             return tenant.id
     if os_tenant is None:
-        tenant = keystone.tenants.create(tenant_name=tenant_name, description='openbaton tenant')
+        tenant = keystone.tenants.create(tenant_name=tenant_name,
+                                         description='openbaton tenant for user %s' % tenant_name)
         os_tenant = tenant.id
         logger.debug("Created tenant with id: %s" % os_tenant)
     keystone.roles.add_user_role(user=user, role=role, tenant=os_tenant)
@@ -76,7 +77,7 @@ def _create_single_project(tenant_name, testbed, testbed_name):
     keypair = import_keypair(nova=nova)
     logger.debug("imported keypair")
 
-    ext_net = get_ext_net(neutron)
+    ext_net = get_ext_net(neutron, testbed.get('ext_net_name'))
     if ext_net is None:
         logger.error(
             "A shared External Network called softfire-network must exist! "
@@ -85,7 +86,9 @@ def _create_single_project(tenant_name, testbed, testbed_name):
         raise OpenstackClientError("A shared External Network called softfire-network must exist! "
                                    "Please create one in your openstack instance")
     logger.debug("Created Network %s, Subnet %s, Router %s" % create_networks_and_subnets(neutron, ext_net))
-    allocate_floating_ips(neutron, 5, ext_net)
+    fips = testbed.get("allocate-fip")
+    if fips is not None and int(fips) > 0:
+        allocate_floating_ips(neutron, int(fips), ext_net)
     sec_group = create_security_group(neutron)
     vim_instance = {
         "name": "vim-instance-%s" % testbed_name,
@@ -113,9 +116,9 @@ def get_openstack_credentials():
         return json.loads(f.read())
 
 
-def get_ext_net(neutron):
+def get_ext_net(neutron, ext_net_name='softfire-network'):
     return [ext_net for ext_net in neutron.list_networks()['networks'] if
-            ext_net['router:external'] and ext_net['name'] == 'softfire-network'][0]
+            ext_net['router:external'] and ext_net['name'] == ext_net_name][0]
 
 
 def import_keypair(nova):
