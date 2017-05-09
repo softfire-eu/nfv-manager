@@ -4,13 +4,15 @@ from org.openbaton.cli.agents.agents import OpenBatonAgentFactory
 from org.openbaton.cli.openbaton import LIST_PRINT_KEY
 
 from eu.softfire.messaging.grpc import messages_pb2
+from eu.softfire.utils.os_utils import create_os_project
 from eu.softfire.utils.utils import get_config, get_logger
 
 logger = get_logger('eu.softfire.core')
 config = get_config()
+https = config.getboolean("nfvo", "https")
 agent = OpenBatonAgentFactory(nfvo_ip=config.get("nfvo", "ip"),
                               nfvo_port=config.get("nfvo", "port"),
-                              https=config.get("nfvo", "https"),
+                              https=https,
                               version=1,
                               username=config.get("nfvo", "username"),
                               password=config.get("nfvo", "password"),
@@ -67,6 +69,7 @@ def release_resources(payload, user_info):
 
 def create_user(name, password):
     # TODO create tenants in openstacks
+    os_tenants = create_os_project(name)
     project_agent = agent.get_project_agent()
     project = {
         'name': name,
@@ -85,9 +88,13 @@ def create_user(name, password):
             }
         ]
     }
-    user_agent = agent.get_user_agent().create(json.dumps(user))
+    logger.debug("Create openbaton project %s" % project)
+    user = agent.get_user_agent(project.id).create(user)
+    logger.debug("Create openbaton user %s" % user)
+    # TODO upload vim instances
+
     user_info = messages_pb2.UserInfo()
     user_info.name = name
     user_info.password = password
     user_info.ob_project_id = project.id
-    return None
+    return user_info

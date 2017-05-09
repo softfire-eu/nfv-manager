@@ -1,34 +1,216 @@
 import json
 
 import neutronclient
+from keystoneclient.v2_0 import client as ks_client
 from neutronclient.common.exceptions import IpAddressGenerationFailureClient
+from neutronclient.v2_0.client import Client as Neutron
+from novaclient.client import Client as Nova
 
 from eu.softfire.utils.exceptions import OpenstackClientError
 from eu.softfire.utils.utils import get_logger, get_config
-from keystoneclient.v2_0.client import Client as Keystone
-from neutronclient.v2_0.client import Client as Neutron
-from novaclient.client import Client as Nova
 
 logger = get_logger('eu.softfire.util.openstack')
 
 NETWORKS = ["mgmt", "net_a", "net_b", "net_c", "net_d", "private", "softfire-internal"]
 
 
-def get_user_by_username(username, keystone):
-    users = keystone.users.list()
-    for user in users:
-        if user.name == username:
-            return user
+class OSClient(object):
+    def __init__(self, testbed_name, testbed):
+        self.testbed_name = testbed_name
+        self.testbed = testbed
+        self.username = self.testbed.get('username')
+        self.password = self.testbed.get('password')
+        self.auth_url = self.testbed.get("auth_url")
+        self.admin_tenant_name = self.testbed.get("admin_tenant_name")
+        self.keystone = ks_client.Client(auth_url=self.auth_url,
+                                         username=self.username,
+                                         password=self.password,
+                                         tenant_name=self.admin_tenant_name,
+                                         )
+        self.neutron = None
+        self.nova = None
+        self.os_tenant_id = None
+
+    def set_nova(self, os_tenant_id):
+        self.os_tenant_id = os_tenant_id
+        if not self.nova:
+            self.nova = Nova('2', self.username, self.password, self.os_tenant_id, self.auth_url)
+
+    def set_neutron(self, os_tenant_id):
+        self.os_tenant_id = os_tenant_id
+        if not self.neutron:
+            self.neutron = Neutron(username=self.username,
+                                   password=self.password,
+                                   tenant_id=self.os_tenant_id,
+                                   auth_url=self.auth_url)
+
+    def get_user(self):
+        users = self.keystone.users.list()
+        for user in users:
+            if user.name == self.username:
+                return user
+
+    def get_role(self, role_to_find):
+        roles = self.keystone.roles.list()
+        for role in roles:
+            if role.name == role_to_find:
+                return role
+
+    def list_tenants(self):
+        return self.keystone.tenants.list()
+
+    def create_tenant(self, tenant_name, description):
+        self.tenant_name = tenant_name
+        return self.keystone.tenants.create(tenant_name=tenant_name, description=description)
+
+    def add_user_role(self, user, role, tenant):
+        return self.keystone.roles.add_user_role(user=user, role=role, tenant=tenant)
+
+    def import_keypair(self, os_tenant_id=None):
+        if not self.nova and not os_tenant_id:
+            raise OpenstackClientError("Both os_tenant_id and nova obj are None")
+        if not self.nova:
+            self.set_nova(os_tenant_id=os_tenant_id)
+        keypair_name = "softfire-key"
+        self.keypair = keypair_name
+        for keypair in self.nova.keypairs.list():
+            if keypair.name == keypair_name:
+                return keypair
+        kargs = {"name": keypair_name,
+                 "public_key": open(get_config().get('system', 'softfire-public-key'), "r").read()}
+        return self.nova.keypairs.create(**kargs)
+
+    def get_ext_net(self, ext_net_name='softfire-network'):
+        return [ext_net for ext_net in self.neutron.list_networks()['networks'] if
+                ext_net['router:external'] and ext_net['name'] == ext_net_name][0]
+
+    def allocate_floating_ips(self, fip_num=0, ext_net='softfire-network'):
+        body = {"floatingip": {"floating_network_id": ext_net['id']}}
+        for i in range(fip_num):
+            try:
+                self.neutron.create_floatingip(body=body)
+            except IpAddressGenerationFailureClient as e:
+                logger.error("Not able to allocate floatingips :(")
+                raise OpenstackClientError("Not able to allocate floatingips :(")
+
+    def create_networks_and_subnets(self, ext_net, router_name='ob_router'):
+        networks = []
+        subnets = []
+        ports = []
+        router_id = None
+        exist_net = [network for network in self.neutron.list_networks()['networks']]
+        exist_net_names = [network['name'] for network in exist_net]
+        net_name_to_create = [net for net in NETWORKS if net not in exist_net_names]
+        networks.extend(network for network in exist_net if network['name'] in NETWORKS)
+        index = 1
+        for net in net_name_to_create:
+            kwargs = {'network': {
+                'name': net,
+                'shared': False,
+                'admin_state_up': True
+            }}
+            logger.debug("Creating net %s" % net)
+            network_ = self.neutron.create_network(body=kwargs)['network']
+            networks.append(network_)
+            kwargs = {
+                'subnets': [
+                    {
+                        'name': "subnet_%s" % net,
+                        'cidr': "192.%s.%s.0/24" % ((get_username_hash(self.username) % 254) + 1, index),
+                        'gateway_ip': '192.%s.%s.1' % ((get_username_hash(self.username) % 254) + 1, index),
+                        'ip_version': '4',
+                        'enable_dhcp': True,
+                        'dns_nameservers': ['8.8.8.8'],
+                        'network_id': network_['id']
+                    }
+                ]
+            }
+            logger.debug("Creating subnet subnet_%s" % net)
+            subnet = self.neutron.create_subnet(body=kwargs)
+            subnets.append(subnet)
+
+            router = self.get_router_from_name(router_name, ext_net)
+            router_id = router['router']['id']
+
+            body_value = {
+                'subnet_id': subnet['subnets'][0]['id'],
+            }
+            try:
+                ports.append(self.neutron.add_interface_router(router=router_id, body=body_value))
+            except Exception as e:
+                pass
+            index += 1
+
+        return networks, subnets, router_id
+
+    def get_router_from_name(self, router_name, ext_net):
+        for router in self.neutron.list_routers()['routers']:
+            if router['name'] == router_name:
+                return self.neutron.show_router(router['id'])
+        request = {'router': {'name': router_name, 'admin_state_up': True}}
+        router = self.neutron.create_router(request)
+        body_value = {"network_id": ext_net['id']}
+        self.neutron.add_gateway_router(router=router['router']['id'], body=body_value)
+        return router
+
+    def create_rule(self, sec_group, protocol):
+        body = {"security_group_rule": {
+            "direction": "ingress",
+            "port_range_min": "1",
+            "port_range_max": "65535",
+            # "name": sec_group['security_group']['name'],
+            "security_group_id": sec_group['security_group']['id'],
+            "remote_ip_prefix": "0.0.0.0/0",
+            "protocol": protocol,
+        }}
+        if protocol == 'icmp':
+            body['security_group_rule'].pop('port_range_min', None)
+            body['security_group_rule'].pop('port_range_max', None)
+        try:
+            self.neutron.create_security_group_rule(body=body)
+        except neutronclient.common.exceptions.Conflict as e:
+            logger.error("error while creating a rule: %s" % e.message)
+            pass
+
+    def create_security_group(self, sec_group_name='ob_sec_group'):
+        sec_group = {}
+        for sg in self.neutron.list_security_groups()['security_groups']:
+            if sg['name'] == sec_group_name:
+                sec_group['security_group'] = sg
+                break
+        if len(sec_group) == 0:
+            body = {"security_group": {
+                'name': sec_group_name,
+                'description': 'openbaton security group',
+            }}
+            sec_group = self.neutron.create_security_group(body=body)
+            self.create_rule(sec_group, 'tcp')
+            self.create_rule(sec_group, 'udp')
+            self.create_rule(sec_group, 'icmp')
+        self.sec_group = sec_group['security_group']
+        return self.sec_group
+
+    def get_vim_instance(self):
+        return {
+            "name": "vim-instance-%s" % self.testbed_name,
+            "authUrl": self.auth_url,
+            "tenant": self.tenant_name,
+            "username": self.username,
+            "password": self.password,
+            "keyPair": self.keypair,
+            "securityGroups": [
+                self.sec_group['name']
+            ],
+            "type": "openstack",
+            "location": {
+                "name": "Berlin",
+                "latitude": "52.525876",
+                "longitude": "13.314400"
+            }
+        }
 
 
-def get_role(role_to_find, keystone):
-    roles = keystone.roles.list()
-    for role in roles:
-        if role.name == role_to_find:
-            return role
-
-
-def create_project(tenant_name, testbed_name=None):
+def create_os_project(tenant_name, testbed_name=None):
     openstack_credentials = get_openstack_credentials()
     os_tenants = {}
     if not testbed_name:
@@ -44,71 +226,50 @@ def create_project(tenant_name, testbed_name=None):
 
 
 def _create_single_project(tenant_name, testbed, testbed_name):
-    username = testbed.get('username')
-    password = testbed.get('password')
-    auth_url = testbed.get("auth_url")
-    keystone = Keystone(username=username,
-                        password=password,
-                        auth_url=auth_url,
-                        tenant_name=tenant_name)
-    os_tenant = None
-    user = get_user_by_username(username, keystone)
-    role = get_role('admin', keystone)
-    for tenant in keystone.tenants.list():
+    os_client = OSClient(testbed_name, testbed)
+
+    os_tenant_id = None
+    user = os_client.get_user()
+    role = os_client.get_role('admin')
+    for tenant in os_client.list_tenants():
         if tenant.name == tenant_name:
             logger.warn("Tenant with name or id %s exists already! I assume a double registration i will not do "
                         "anything :)" % tenant_name)
             logger.warn("returning tenant id %s" % tenant.id)
             return tenant.id
-    if os_tenant is None:
-        tenant = keystone.tenants.create(tenant_name=tenant_name,
+    if os_tenant_id is None:
+        tenant = os_client.create_tenant(tenant_name=tenant_name,
                                          description='openbaton tenant for user %s' % tenant_name)
-        os_tenant = tenant.id
-        logger.debug("Created tenant with id: %s" % os_tenant)
-    keystone.roles.add_user_role(user=user, role=role, tenant=os_tenant)
+        os_tenant_id = tenant.id
+        logger.debug("Created tenant with id: %s" % os_tenant_id)
+    os_client.set_nova(os_tenant_id)
+    os_client.set_neutron(os_tenant_id)
+    os_client.add_user_role(user=user, role=role, tenant=os_tenant_id)
 
-    neutron = Neutron(username=username,
-                      password=password,
-                      project_name=tenant_name,
-                      auth_url=auth_url)
-
-    nova = Nova('2', username, password, os_tenant, auth_url)
-
-    keypair = import_keypair(nova=nova)
+    keypair = os_client.import_keypair(os_tenant_id=os_tenant_id)
     logger.debug("imported keypair")
+    ext_net = os_client.get_ext_net(testbed.get('ext_net_name'))
 
-    ext_net = get_ext_net(neutron, testbed.get('ext_net_name'))
     if ext_net is None:
         logger.error(
-            "A shared External Network called softfire-network must exist! "
-            "Please create one in your openstack instance"
+            "A shared External Network called %s must exist! "
+            "Please create one in your openstack instance" % testbed.get('ext_net_name')
         )
         raise OpenstackClientError("A shared External Network called softfire-network must exist! "
                                    "Please create one in your openstack instance")
-    networks, subnets, router_id = create_networks_and_subnets(neutron, ext_net)
+    networks, subnets, router_id = os_client.create_networks_and_subnets(ext_net)
     logger.debug("Created Network %s, Subnet %s, Router %s" % (networks, subnets, router_id))
+
     fips = testbed.get("allocate-fip")
     if fips is not None and int(fips) > 0:
-        allocate_floating_ips(neutron, int(fips), ext_net)
-    sec_group = create_security_group(neutron)
-    vim_instance = {
-        "name": "vim-instance-%s" % testbed_name,
-        "authUrl": auth_url,
-        "tenant": tenant_name,
-        "username": username,
-        "password": password,
-        "keyPair": keypair.name,
-        "securityGroups": [
-            sec_group['name']
-        ],
-        "type": "openstack",
-        "location": {
-            "name": "Berlin",
-            "latitude": "52.525876",
-            "longitude": "13.314400"
-        }
-    }
-    return os_tenant, vim_instance
+        try:
+            os_client.allocate_floating_ips(int(fips), ext_net)
+        except OpenstackClientError as e:
+            logger.warn(e.message)
+
+    sec_group = os_client.create_security_group()
+    vim_instance = os_client.get_vim_instance()
+    return os_tenant_id, vim_instance
 
 
 def get_openstack_credentials():
@@ -117,131 +278,8 @@ def get_openstack_credentials():
         return json.loads(f.read())
 
 
-def get_ext_net(neutron, ext_net_name='softfire-network'):
-    return [ext_net for ext_net in neutron.list_networks()['networks'] if
-            ext_net['router:external'] and ext_net['name'] == ext_net_name][0]
-
-
-def import_keypair(nova):
-    for keypair in nova.keypairs.list():
-        if keypair.name == "softfire-key":
-            return keypair
-    kargs = {"name": "softfire-key", "public_key": open(get_config().get('system', 'softfire-public-key'), "r").read()}
-    return nova.keypairs.create(**kargs)
-
-
 def get_username_hash(username):
     return abs(hash(username))
-
-
-def create_networks_and_subnets(neutron, ext_net, username, router_name='ob_router'):
-    networks = []
-    subnets = []
-    ports = []
-    router_id = None
-    exist_net = [network for network in neutron.list_networks()['networks']]
-    exist_net_names = [network['name'] for network in exist_net]
-    net_name_to_create = [net for net in NETWORKS if net not in exist_net_names]
-    networks.extend(network for network in exist_net if network['name'] in NETWORKS)
-    index = 1
-    for net in net_name_to_create:
-        kwargs = {'network': {
-            'name': net,
-            'shared': False,
-            'admin_state_up': True
-        }}
-        logger.debug("Creating net %s" % net)
-        network_ = neutron.create_network(body=kwargs)['network']
-        networks.append(network_)
-        kwargs = {
-            'subnets': [
-                {
-                    'name': "subnet_%s" % net,
-                    'cidr': "192.%s.%s.0/24" % ((get_username_hash(username) % 254) + 1, index),
-                    'gateway_ip': '192.168.%s.1' % index,
-                    'ip_version': '4',
-                    'enable_dhcp': True,
-                    'dns_nameservers': ['8.8.8.8'],
-                    'network_id': network_['id']
-                }
-            ]
-        }
-        logger.debug("Creating subnet subnet_%s" % net)
-        subnet = neutron.create_subnet(body=kwargs)
-        subnets.append(subnet)
-
-        router = get_router_from_name(neutron, router_name, ext_net)
-        router_id = router['router']['id']
-
-        body_value = {
-            'subnet_id': subnet['subnets'][0]['id'],
-        }
-        try:
-            ports.append(neutron.add_interface_router(router=router_id, body=body_value))
-        except Exception as e:
-            pass
-        index += 1
-
-    return networks, subnets, router_id
-
-
-def get_router_from_name(neutron, router_name, ext_net):
-    for router in neutron.list_routers()['routers']:
-        if router['name'] == router_name:
-            return neutron.show_router(router['id'])
-    request = {'router': {'name': router_name, 'admin_state_up': True}}
-    router = neutron.create_router(request)
-    body_value = {"network_id": ext_net['id']}
-    neutron.add_gateway_router(router=router['router']['id'], body=body_value)
-    return router
-
-
-def allocate_floating_ips(neutron, fip_num, ext_net):
-    body = {"floatingip": {"floating_network_id": ext_net['id']}}
-    for i in range(fip_num):
-        try:
-            neutron.create_floatingip(body=body)
-        except IpAddressGenerationFailureClient as e:
-            logger.error("Not able to allocate floatingips :(")
-            raise OpenstackClientError("Not able to allocate floatingips :(")
-
-
-def create_rule(neutron, sec_group, protocol):
-    body = {"security_group_rule": {
-        "direction": "ingress",
-        "port_range_min": "1",
-        "port_range_max": "65535",
-        # "name": sec_group['security_group']['name'],
-        "security_group_id": sec_group['security_group']['id'],
-        "remote_ip_prefix": "0.0.0.0/0",
-        "protocol": protocol,
-    }}
-    if protocol == 'icmp':
-        body['security_group_rule'].pop('port_range_min', None)
-        body['security_group_rule'].pop('port_range_max', None)
-    try:
-        neutron.create_security_group_rule(body=body)
-    except neutronclient.common.exceptions.Conflict as e:
-        logger.error("error while creating a rule: %s" % e.message)
-        pass
-
-
-def create_security_group(neutron, sec_group_name='ob_sec_group'):
-    sec_group = {}
-    for sg in neutron.list_security_groups()['security_groups']:
-        if sg['name'] == sec_group_name:
-            sec_group['security_group'] = sg
-            break
-    if len(sec_group) == 0:
-        body = {"security_group": {
-            'name': sec_group_name,
-            'description': 'openbaton security group',
-        }}
-        sec_group = neutron.create_security_group(body=body)
-    create_rule(neutron, sec_group, 'tcp')
-    create_rule(neutron, sec_group, 'udp')
-    create_rule(neutron, sec_group, 'icmp')
-    return sec_group['security_group']
 
 # def associate_router_to_subnets(networks, neutron, router_name='ob_router'):
 #     router = get_router_from_name(neutron, router_name, ext_net)
