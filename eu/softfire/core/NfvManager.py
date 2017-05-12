@@ -1,5 +1,3 @@
-from eu.softfire.tub.entities.entities import Experimenter
-from eu.softfire.tub.entities.repositories import save
 from org.openbaton.cli.agents.agents import OpenBatonAgentFactory
 from org.openbaton.cli.openbaton import LIST_PRINT_KEY
 
@@ -10,13 +8,21 @@ from eu.softfire.utils.utils import get_config, get_logger
 logger = get_logger('eu.softfire.core')
 
 AVAILABLE_AGENTS = LIST_PRINT_KEY.keys()
-DESCRIPTIONS = {
-    'openimscore': "The Open IMS Core is an Open Source implementation of IMS Call Session Control Functions ("
-                   "CSCFs) and a lightweight Home Subscriber Server (HSS), which together form the core elements "
-                   "of all IMS/NGN architectures as specified today within 3GPP, 3GPP2, ETSI TISPAN and the PacketCable"
-                   " intiative. The four components are all based upon Open Source software(e.g. the SIP Express Router"
-                   " (SER) or MySQL).",
-    'open5gcore': "the description goes here",
+AVAILABLE_NSD = {
+    'openimscore': {
+        'description': "The Open IMS Core is an Open Source implementation of IMS Call Session Control Functions ("
+                       "CSCFs) and a lightweight Home Subscriber Server (HSS), which together form the core elements "
+                       "of all IMS/NGN architectures as specified today within 3GPP, 3GPP2, ETSI TISPAN and the PacketCable"
+                       " intiative. The four components are all based upon Open Source software(e.g. the SIP Express Router"
+                       " (SER) or MySQL).",
+        "cardinality": -1,
+        "testbed": None
+    },
+    'open5gcore': {
+        'description': "the description goes here",
+        'cardinality': -1,
+        'testbed': messages_pb2.FOKUS
+    },
 }
 CARDINALITY = {
     'open5gcore': 1,
@@ -91,12 +97,22 @@ class OBClient(object):
 
 
 def list_resources(payload, user_info):
-    ob_client = OBClient(user_info.name)
-
     result = []
 
+    if not user_info or not user_info.name:
+        for k, v in AVAILABLE_NSD.items():
+            result.append(messages_pb2.ResourceMetadata(resource_id=k,
+                                                        description=v.get('description'),
+                                                        cardinality=int(v.get('cardinality')),
+                                                        testbed=v.get('testbed')))
+        return result
+
+    ob_client = OBClient(user_info.name)
+
     for nsd in ob_client.list_nsds():
-        result.append(messages_pb2.ResourceMetadata(nsd.name, nsd.get('description') or DESCRIPTIONS[nsd.name.lower()],
+        result.append(messages_pb2.ResourceMetadata(nsd.name,
+                                                    nsd.get('description') or AVAILABLE_NSD[nsd.name.lower()].get(
+                                                        'description'),
                                                     CARDINALITY[nsd.name.lower()]))
 
     return result
@@ -155,14 +171,14 @@ def create_user(name, password):
     user_info.testbed_tenants = testbed_tenants
     logger.debug("Updated user_info %s" % user_info)
 
-    experimenter = Experimenter()
-    experimenter.name = name
-    experimenter.password = password
-    experimenter.role = 'experimenter'
-    experimenter.testbed_tenants = testbed_tenants
-
-    logger.debug("Create Experimenter %s" % experimenter)
-    save(experimenter)
-    logger.debug("Saved Experimenter")
+    # experimenter = Experimenter()
+    # experimenter.name = name
+    # experimenter.password = password
+    # experimenter.role = 'experimenter'
+    # experimenter.testbed_tenants = testbed_tenants
+    #
+    # logger.debug("Create Experimenter %s" % experimenter)
+    # save(experimenter)
+    # logger.debug("Saved Experimenter")
 
     return user_info
