@@ -16,11 +16,13 @@ AVAILABLE_NSD = {
                        " intiative. The four components are all based upon Open Source software(e.g. the SIP Express Router"
                        " (SER) or MySQL).",
         "cardinality": -1,
+        "node_type": 'NfvResource',
         "testbed": None
     },
     'open5gcore': {
         'description': "the description goes here",
         'cardinality': -1,
+        "node_type": 'NfvResource',
         'testbed': messages_pb2.FOKUS
     },
 }
@@ -101,10 +103,16 @@ def list_resources(payload, user_info):
 
     if not user_info or not user_info.name:
         for k, v in AVAILABLE_NSD.items():
-            result.append(messages_pb2.ResourceMetadata(resource_id=k,
-                                                        description=v.get('description'),
-                                                        cardinality=int(v.get('cardinality')),
-                                                        testbed=v.get('testbed')))
+            testbed = v.get('testbed')
+            node_type = v.get('node_type')
+            cardinality = int(v.get('cardinality'))
+            description = v.get('description')
+            resource_id = k
+            result.append(messages_pb2.ResourceMetadata(resource_id=resource_id,
+                                                        description=description,
+                                                        cardinality=cardinality,
+                                                        node_type=node_type,
+                                                        testbed=testbed))
         return result
 
     ob_client = OBClient(user_info.name)

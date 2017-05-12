@@ -1,7 +1,7 @@
+import time
 from concurrent import futures
 
 import grpc
-import time
 
 from eu.softfire.core import NfvManager
 from eu.softfire.core.NfvManager import list_resources, provide_resources, release_resources
@@ -65,7 +65,11 @@ class ManagerAgent(messages_pb2_grpc.ManagerAgentServicer):
                                                     list_resource=self.list_resources(payload=request.payload,
                                                                                       user_info=request.user_info))
             except Exception as e:
-                return messages_pb2.ResponseMessage(result=2, error_message=e.message)
+                if hasattr(e, "message"):
+                    return messages_pb2.ResponseMessage(result=2, error_message=e.message)
+                if hasattr(e, "args"):
+                    return messages_pb2.ResponseMessage(result=2, error_message=e.args)
+                return messages_pb2.ResponseMessage(result=2, error_message="No message available")
         if request.method == messages_pb2.PROVIDE_RESOURCES:
             try:
                 return messages_pb2.ResponseMessage(result=0,
