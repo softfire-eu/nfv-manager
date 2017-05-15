@@ -12,6 +12,8 @@ class MyTestCase(unittest.TestCase):
         self.keystone = self.get_keystone()
         os_utils.get_user_by_username(self.username, self.keystone)
 
+
+
     def get_keystone(self):
         self.testbed = os_utils.get_openstack_credentials().get(TESTBED_UNDER_TEST)
         self.username = self.testbed.get('username')

@@ -1,6 +1,9 @@
 import json
 
 import neutronclient
+from glanceclient import Client as Glance
+from keystoneauth1 import session
+from keystoneauth1.identity import v2
 from keystoneclient.v2_0 import client as ks_client
 from neutronclient.common.exceptions import IpAddressGenerationFailureClient
 from neutronclient.v2_0.client import Client as Neutron
@@ -15,21 +18,33 @@ NETWORKS = ["mgmt", "net_a", "net_b", "net_c", "net_d", "private", "softfire-int
 
 
 class OSClient(object):
-    def __init__(self, testbed_name, testbed):
+    def __init__(self, testbed_name, testbed, tenant_name=None):
         self.testbed_name = testbed_name
         self.testbed = testbed
         self.username = self.testbed.get('username')
         self.password = self.testbed.get('password')
         self.auth_url = self.testbed.get("auth_url")
         self.admin_tenant_name = self.testbed.get("admin_tenant_name")
-        self.keystone = ks_client.Client(auth_url=self.auth_url,
-                                         username=self.username,
-                                         password=self.password,
-                                         tenant_name=self.admin_tenant_name,
-                                         )
         self.neutron = None
         self.nova = None
+        self.glance = None
         self.os_tenant_id = None
+        if not tenant_name:
+            self.keystone = ks_client.Client(auth_url=self.auth_url,
+                                             username=self.username,
+                                             password=self.password,
+                                             tenant_name=self.admin_tenant_name)
+        else:
+            self.tenant_name = tenant_name
+
+            self.keystone = ks_client.Client(auth_url=self.auth_url,
+                                             username=self.username,
+                                             password=self.password,
+                                             tenant_name=tenant_name)
+            self.os_tenant_id = self._get_tenant_id_from_name(self.tenant_name)
+            self.set_nova(self.os_tenant_id)
+            self.set_neutron(self.os_tenant_id)
+            self.set_glance(self.os_tenant_id)
 
     def set_nova(self, os_tenant_id):
         self.os_tenant_id = os_tenant_id
@@ -209,6 +224,52 @@ class OSClient(object):
             }
         }
 
+    def list_images(self, tenant_id=None):
+        if not self.nova:
+            if not tenant_id:
+                logger.error("Missing tenant_id!")
+                raise OpenstackClientError('Missing tenant_id!')
+            self.set_nova(tenant_id)
+
+        return self.glance.images.list()
+
+    def _get_tenant_id_from_name(self, tenant_name):
+        for tenant in self.keystone.tenants.list():
+            if tenant.name == tenant_name:
+                return tenant.id
+
+    def set_glance(self, os_tenant_id):
+        self.os_tenant_id = os_tenant_id
+        auth = v2.Password(auth_url=self.auth_url,
+                           username=self.username,
+                           password=self.password,
+                           tenant_name=self.tenant_name)
+        sess = session.Session(auth=auth)
+        self.glance = Glance('1', session=sess)
+
+
+def _list_images_single_tenant(tenant_name, testbed, testbed_name):
+    os_client = OSClient(testbed_name, testbed, tenant_name)
+    result = []
+    for image in os_client.list_images():
+        logger.debug("%s" % image.name)
+        result.append({
+            'name': image.name,
+            'testbed': testbed_name
+        })
+    return result
+
+
+def list_images(tenant_name, testbed_name=None):
+    openstack_credentials = get_openstack_credentials()
+    images = []
+    if not testbed_name:
+        for name, testbed in openstack_credentials.items():
+            images.extend(_list_images_single_tenant(tenant_name, testbed, name))
+    else:
+        images = _list_images_single_tenant(tenant_name, openstack_credentials.get(testbed_name), testbed_name)
+    return images
+
 
 def create_os_project(tenant_name, testbed_name=None):
     openstack_credentials = get_openstack_credentials()
@@ -281,36 +342,7 @@ def get_openstack_credentials():
 def get_username_hash(username):
     return abs(hash(username))
 
-# def associate_router_to_subnets(networks, neutron, router_name='ob_router'):
-#     router = get_router_from_name(neutron, router_name, ext_net)
-#     router_id = router['router']['id']
-#
-#     ports = []
-#     for network in networks:
-#         logger.dubug("checking net: %s" % network['name'])
-#         net_has_int = False
-#         for port in neutron.list_ports()['ports']:
-#             logger.dubug("Checking port:\n%s" % port)
-#             if port['network_id'] == network['id']:
-#                 body_value = {
-#                     'subnet_id': network['subnets'][0],
-#                 }
-#                 try:
-#                     ports.append(neutron.add_interface_router(router=router_id, body=body_value))
-#                 except Exception as e:
-#                     print
-#                     e.message
-#                 net_has_int = True
-#         if not net_has_int:
-#             body_value = {'port': {
-#                 'admin_state_up': True,
-#                 'device_id': router_id,
-#                 'name': 'ob_port',
-#                 'network_id': network['id'],
-#
-#                 # 'network_id': subnet['id'],
-#             }}
-#             logger.dubug("Creating port: %s" % body_value['port']['name'])
-#             ports.append(neutron.create_port(body=body_value))
-#
-#     return router, ports
+
+if __name__ == '__main__':
+    res = list_images('5gcore', 'fokus')
+    print(res)

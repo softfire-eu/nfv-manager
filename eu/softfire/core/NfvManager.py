@@ -2,7 +2,7 @@ from org.openbaton.cli.agents.agents import OpenBatonAgentFactory
 from org.openbaton.cli.openbaton import LIST_PRINT_KEY
 
 from eu.softfire.messaging.grpc import messages_pb2
-from eu.softfire.utils.os_utils import create_os_project
+from eu.softfire.utils.os_utils import create_os_project, list_images
 from eu.softfire.utils.utils import get_config, get_logger
 
 logger = get_logger('eu.softfire.core')
@@ -20,7 +20,11 @@ AVAILABLE_NSD = {
         "testbed": None
     },
     'open5gcore': {
-        'description': "the description goes here",
+        'description': "Open5GCore is a prototype implementation of the pre-standard 5G network. The software is "
+                       "available from November 2014 and its main features are described on www.open5gcore.net. "
+                       "Open5GCore represents the continuation of the OpenEPC project towards R&D testbed "
+                       "deployments. It has been used over the years in multiple projects as a reference vEPC "
+                       "implementation.",
         'cardinality': -1,
         "node_type": 'NfvResource',
         'testbed': messages_pb2.FOKUS
@@ -101,27 +105,35 @@ class OBClient(object):
 def list_resources(payload, user_info):
     result = []
 
-    if not user_info or not user_info.name:
-        for k, v in AVAILABLE_NSD.items():
-            testbed = v.get('testbed')
-            node_type = v.get('node_type')
-            cardinality = int(v.get('cardinality'))
-            description = v.get('description')
-            resource_id = k
-            result.append(messages_pb2.ResourceMetadata(resource_id=resource_id,
-                                                        description=description,
-                                                        cardinality=cardinality,
-                                                        node_type=node_type,
-                                                        testbed=testbed))
-        return result
+    if user_info and user_info.name:
+        ob_client = OBClient(user_info.name)
 
-    ob_client = OBClient(user_info.name)
+        for nsd in ob_client.list_nsds():
+            result.append(messages_pb2.ResourceMetadata(nsd.name,
+                                                        nsd.get('description') or AVAILABLE_NSD[nsd.name.lower()].get(
+                                                            'description'),
+                                                        CARDINALITY[nsd.name.lower()]))
 
-    for nsd in ob_client.list_nsds():
-        result.append(messages_pb2.ResourceMetadata(nsd.name,
-                                                    nsd.get('description') or AVAILABLE_NSD[nsd.name.lower()].get(
-                                                        'description'),
-                                                    CARDINALITY[nsd.name.lower()]))
+            for image in list_images(user_info.name):
+                testbed = image.get('testbed')
+                resource_id = image.get('name')
+                result.append(messages_pb2.ResourceMetadata(resource_id=resource_id,
+                                                            description='',
+                                                            cardinality=-1,
+                                                            node_type='NfvImage',
+                                                            testbed=TESTBED_MAPPING.get(testbed)))
+
+    for k, v in AVAILABLE_NSD.items():
+        testbed = v.get('testbed')
+        node_type = v.get('node_type')
+        cardinality = int(v.get('cardinality'))
+        description = v.get('description')
+        resource_id = k
+        result.append(messages_pb2.ResourceMetadata(resource_id=resource_id,
+                                                    description=description,
+                                                    cardinality=cardinality,
+                                                    node_type=node_type,
+                                                    testbed=testbed))
 
     return result
 
