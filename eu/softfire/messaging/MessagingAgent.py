@@ -55,8 +55,21 @@ def unregister():
 
 
 class ManagerAgent(messages_pb2_grpc.ManagerAgentServicer):
+    def refresh_resources(self, request, context):
+        try:
+            return messages_pb2.ResponseMessage(result=0,
+                                                list_resource=self.list_images_resources(
+                                                    user_info=request)
+                                                )
+        except Exception as e:
+            if hasattr(e, "message"):
+                return messages_pb2.ResponseMessage(result=2, error_message=e.message)
+            if hasattr(e, "args"):
+                return messages_pb2.ResponseMessage(result=2, error_message=e.args)
+            return messages_pb2.ResponseMessage(result=2, error_message="No message available")
+
     def create_user(self, request, context):
-        NfvManager.create_user(request.name, request.password)
+        return NfvManager.create_user(request.name, request.password)
 
     def execute(self, request, context):
         if request.method == messages_pb2.LIST_RESOURCES:
@@ -94,3 +107,7 @@ class ManagerAgent(messages_pb2_grpc.ManagerAgentServicer):
 
     def release_resources(self, payload=None, user_info=None):
         release_resources(payload, user_info)
+
+    def list_images_resources(self, user_info):
+        images = NfvManager.list_images(user_info.name)
+        return messages_pb2.ListResourceResponse(resources=images)
