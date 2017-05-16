@@ -28,6 +28,8 @@ class OSClient(object):
         self.neutron = None
         self.nova = None
         self.glance = None
+        self.keypair = None
+        self.sec_group = None
         self.os_tenant_id = None
         if not tenant_name:
             self.keystone = ks_client.Client(auth_url=self.auth_url,
@@ -205,7 +207,15 @@ class OSClient(object):
         self.sec_group = sec_group['security_group']
         return self.sec_group
 
-    def get_vim_instance(self):
+    def get_vim_instance(self, tenant_name=None):
+        if tenant_name:
+            self.tenant_name = tenant_name
+        tenant_id_from_name = self._get_tenant_id_from_name(tenant_name)
+        if not self.keypair:
+            self.keypair = self.import_keypair(os_tenant_id=tenant_id_from_name).name
+        if not self.sec_group:
+            self.set_neutron(tenant_id_from_name)
+            self.sec_group = self.create_security_group()
         return {
             "name": "vim-instance-%s" % self.testbed_name,
             "authUrl": self.auth_url,
@@ -247,10 +257,16 @@ class OSClient(object):
         sess = session.Session(auth=auth)
         self.glance = Glance('1', session=sess)
 
+    def _get_tenant_name_from_id(self, os_tenant_id):
+        for t in self.list_tenants():
+            if t.id == os_tenant_id:
+                return t.name
+
 
 def _list_images_single_tenant(tenant_name, testbed, testbed_name):
     os_client = OSClient(testbed_name, testbed, tenant_name)
     result = []
+    # TODO filter images per experimenter
     for image in os_client.list_images():
         logger.debug("%s" % image.name)
         result.append({
@@ -297,18 +313,17 @@ def _create_single_project(tenant_name, testbed, testbed_name):
             logger.warn("Tenant with name or id %s exists already! I assume a double registration i will not do "
                         "anything :)" % tenant_name)
             logger.warn("returning tenant id %s" % tenant.id)
-            return tenant.id
+            return tenant.id, os_client.get_vim_instance(tenant_name)
     if os_tenant_id is None:
         tenant = os_client.create_tenant(tenant_name=tenant_name,
                                          description='openbaton tenant for user %s' % tenant_name)
         os_tenant_id = tenant.id
         logger.debug("Created tenant with id: %s" % os_tenant_id)
-    os_client.set_nova(os_tenant_id)
-    os_client.set_neutron(os_tenant_id)
     os_client.add_user_role(user=user, role=role, tenant=os_tenant_id)
+    os_client = OSClient(testbed_name, testbed, tenant_name)
 
     keypair = os_client.import_keypair(os_tenant_id=os_tenant_id)
-    logger.debug("imported keypair")
+    logger.debug("imported keypair %s " % keypair)
     ext_net = os_client.get_ext_net(testbed.get('ext_net_name'))
 
     if ext_net is None:
