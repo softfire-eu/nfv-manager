@@ -23,7 +23,7 @@ setup(
     keywords="python vnfm nfvo open baton openbaton sdk experiment manager softfire tosca openstack rest",
     url="http://softfire.eu/",
     packages=find_packages(),
-    scripts=["manager"],
+    scripts=["nfv-manager"],
     install_requires=[
         'asyncio',
         'grpcio',

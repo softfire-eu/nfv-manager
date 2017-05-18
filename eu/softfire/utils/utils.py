@@ -1,4 +1,5 @@
 import configparser
+import json
 import os
 
 import logging
@@ -25,3 +26,8 @@ def get_config():
     else:
         logging.error("Config file not found, create %s" % CONFIG_FILE_PATH)
         exit(1)
+
+
+def get_available_nsds():
+    with open(get_config().get('system', 'available-nsds-file-path'), 'r') as f:
+        return json.loads(f.read())

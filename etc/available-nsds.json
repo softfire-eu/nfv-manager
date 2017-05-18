@@ -1,0 +1,21 @@
+{
+  "iperf": {
+    "description": "iPerf is a tool for active measurements of the maximum achievable bandwidth on IP networks. It supports tuning of various parameters related to timing, buffers and protocols (TCP, UDP, SCTP with IPv4 and IPv6). For each test it reports the bandwidth, loss, and other parameters. This is a new implementation that shares no code with the original iPerf and also is not backwards compatible. iPerf was originally developed by NLANR/DAST. iPerf3 is principally developed by ESnet / Lawrence Berkeley National Laboratory. It is released under a three-clause BSD license.",
+    "cardinality": -1,
+    "node_type": "NfvResource",
+    "package-location": "/etc/softfire/packages/iperf"
+  },
+  "openimscore": {
+    "description": "The Open IMS Core is an Open Source implementation of IMS Call Session Control Functions (CSCFs) and a lightweight Home Subscriber Server (HSS), which together form the core elements of all IMS/NGN architectures as specified today within 3GPP, 3GPP2, ETSI TISPAN and the PacketCable initiative. The four components are all based upon Open Source software(e.g. the SIP Express Router (SER) or MySQL).",
+    "cardinality": -1,
+    "node_type": "NfvResource",
+    "package-location": "/etc/softfire/packages/openimscore"
+  },
+  "open5gcore": {
+    "description": "Open5GCore is a prototype implementation of the pre-standard 5G network. The software is available from November 2014 and its main features are described on www.open5gcore.net. Open5GCore represents the continuation of the OpenEPC project towards R&D testbed deployments. It has been used over the years in multiple projects as a reference vEPC implementation.",
+    "cardinality": 1,
+    "node_type": "NfvResource",
+    "testbed": "fokus",
+    "package-location": "/etc/softfire/packages/open5gcore"
+  }
+}
