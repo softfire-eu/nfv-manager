@@ -1,3 +1,4 @@
+import json
 import time
 from concurrent import futures
 
@@ -103,7 +104,7 @@ class ManagerAgent(messages_pb2_grpc.ManagerAgentServicer):
         return messages_pb2.ListResourceResponse(resources=resources)
 
     def provide_resources(self, payload=None, user_info=None):
-        return provide_resources(payload, user_info)
+        return provide_resources(json.loads(payload), user_info)
 
     def release_resources(self, payload=None, user_info=None):
         release_resources(payload, user_info)

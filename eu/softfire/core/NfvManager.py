@@ -6,33 +6,12 @@ from org.openbaton.cli.openbaton import LIST_PRINT_KEY
 import eu.softfire.utils.os_utils as os_utils
 from eu.softfire.messaging.grpc import messages_pb2
 from eu.softfire.utils.os_utils import create_os_project
-from eu.softfire.utils.utils import get_config, get_logger
+from eu.softfire.utils.utils import get_config, get_logger, get_available_nsds
 
 logger = get_logger('eu.softfire.core')
 
 AVAILABLE_AGENTS = LIST_PRINT_KEY.keys()
-AVAILABLE_NSD = {
-    'openimscore': {
-        'description': "The Open IMS Core is an Open Source implementation of IMS Call Session Control Functions ("
-                       "CSCFs) and a lightweight Home Subscriber Server (HSS), which together form the core elements "
-                       "of all IMS/NGN architectures as specified today within 3GPP, 3GPP2, ETSI TISPAN and the PacketCable"
-                       " intiative. The four components are all based upon Open Source software(e.g. the SIP Express Router"
-                       " (SER) or MySQL).",
-        "cardinality": -1,
-        "node_type": 'NfvResource',
-        "testbed": None
-    },
-    'open5gcore': {
-        'description': "Open5GCore is a prototype implementation of the pre-standard 5G network. The software is "
-                       "available from November 2014 and its main features are described on www.open5gcore.net. "
-                       "Open5GCore represents the continuation of the OpenEPC project towards R&D testbed "
-                       "deployments. It has been used over the years in multiple projects as a reference vEPC "
-                       "implementation.",
-        'cardinality': -1,
-        "node_type": 'NfvResource',
-        'testbed': messages_pb2.FOKUS
-    },
-}
+
 CARDINALITY = {
     'open5gcore': 1,
 }
@@ -132,6 +111,14 @@ class OBClient(object):
 
 
 def list_images(tenant_name):
+    """
+    List all available images for this tenant
+    
+    :param tenant_name: the tenant name
+     :type tenant_name: str
+    :return: the list of ResourceMetadata
+     :rtype list
+    """
     result = []
     for image in os_utils.list_images(tenant_name):
         testbed = image.get('testbed')
@@ -145,6 +132,13 @@ def list_images(tenant_name):
 
 
 def list_resources(payload, user_info):
+    """
+    list all available resources
+    
+    :param payload: Not used
+    :param user_info: the user info requesting, if None only the shared resources will be returned 
+    :return: list of ResourceMetadata
+    """
     result = []
 
     if user_info and user_info.name:
@@ -152,13 +146,14 @@ def list_resources(payload, user_info):
 
         for nsd in ob_client.list_nsds():
             result.append(messages_pb2.ResourceMetadata(nsd.name,
-                                                        nsd.get('description') or AVAILABLE_NSD[nsd.name.lower()].get(
+                                                        nsd.get('description') or get_available_nsds[
+                                                            nsd.name.lower()].get(
                                                             'description'),
                                                         CARDINALITY[nsd.name.lower()]))
 
             result.extend(list_images(user_info.name))
 
-    for k, v in AVAILABLE_NSD.items():
+    for k, v in get_available_nsds().items():
         testbed = v.get('testbed')
         node_type = v.get('node_type')
         cardinality = int(v.get('cardinality'))
@@ -168,23 +163,55 @@ def list_resources(payload, user_info):
                                                     description=description,
                                                     cardinality=cardinality,
                                                     node_type=node_type,
-                                                    testbed=testbed))
+                                                    testbed=TESTBED_MAPPING.get(testbed)))
 
     return result
 
 
 def provide_resources(payload, user_info):
+    """
+    Deploy the selected resources
+    
+    :param payload: the resources to be deployed
+     :type payload: dict
+    :param user_info: the user info requesting
+    :return: the nsr deployed
+     :rtype: ProvideResourceResponse
+    """
     ob_client = OBClient(user_info.name)
-    nsr = ob_client.create_nsr(payload.get("nsd-id"))
+    nsr = {"nsr-id": "test_id"}
+    # nsr = ob_client.create_nsr(payload.get("nsd-id"))
     return messages_pb2.ProvideResourceResponse(resources=nsr)
 
 
 def release_resources(payload, user_info):
+    """
+    Delete the NSR from openbaton based on user_info and the nsr
+    :param payload: the NSR itself
+    :type payload: dict
+    :param user_info:
+     :type user_info: UserInfo
+    :return: None
+    """
     ob_client = OBClient(user_info.name)
-    ob_client.delete_nsr(payload.get("nsr-id"))
+
+    logger.info("Deleting resources for user: %s" % user_info.name)
+    logger.debug("Received this payload: %s" % payload)
+    # ob_client.delete_nsr(payload.get("id"))
 
 
 def create_user(name, password):
+    """
+    Create project in Open Stack and upload the new vim to Open Baton
+    
+    :param name: the username of the user, used here also as tenant name
+     :type name: string
+    :param password: the password of the user
+     :type password: string
+    :return: the new user info updated
+     :rtype: UserInfo
+    
+    """
     os_tenants = create_os_project(tenant_name=name)
     ob_client = OBClient()
     project = {
