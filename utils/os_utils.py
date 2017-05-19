@@ -1,6 +1,8 @@
 import json
+import traceback
 
 import neutronclient
+from utils.utils import get_logger, get_config
 from glanceclient import Client as Glance
 from keystoneauth1 import session
 from keystoneauth1.identity import v2
@@ -9,10 +11,9 @@ from neutronclient.common.exceptions import IpAddressGenerationFailureClient
 from neutronclient.v2_0.client import Client as Neutron
 from novaclient.client import Client as Nova
 
-from eu.softfire.utils.exceptions import OpenstackClientError
-from eu.softfire.utils.utils import get_logger, get_config
+from utils.exceptions import OpenstackClientError
 
-logger = get_logger('eu.softfire.util.openstack')
+logger = get_logger(__name__)
 
 NETWORKS = ["mgmt", "net_a", "net_b", "net_c", "net_d", "private", "softfire-internal"]
 
@@ -281,7 +282,13 @@ def list_images(tenant_name, testbed_name=None):
     images = []
     if not testbed_name:
         for name, testbed in openstack_credentials.items():
-            images.extend(_list_images_single_tenant(tenant_name, testbed, name))
+            logger.info("listing images for testbed %s" % name)
+            try:
+                images.extend(_list_images_single_tenant(tenant_name, testbed, name))
+            except Exception as e:
+                traceback.print_exc()
+                logger.error("Error listing images for testbed: %s" % name)
+                continue
     else:
         images = _list_images_single_tenant(tenant_name, openstack_credentials.get(testbed_name), testbed_name)
     return images

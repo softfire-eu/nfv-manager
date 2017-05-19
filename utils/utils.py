@@ -1,16 +1,15 @@
 import configparser
 import json
-import os
-
 import logging
 import logging.config
+import os
 
-from eu.softfire.utils.static_config import CONFIG_FILE_PATH
+from utils.static_config import CONFIG_FILE_PATH
 
 
 def get_logger(name):
     logging.config.fileConfig(CONFIG_FILE_PATH)
-    return logging.getLogger(name)
+    return logging.getLogger("eu.softfire.nfv.manager.%s" % name)
 
 
 def get_config():
