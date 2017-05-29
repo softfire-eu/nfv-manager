@@ -348,17 +348,11 @@ def _create_single_project(tenant_name, testbed, testbed_name):
         try:
             os_client.allocate_floating_ips(int(fips), ext_net)
         except OpenstackClientError as e:
-            logger.warn(e.message)
+            logger.warn(e.args)
 
     sec_group = os_client.create_security_group()
     vim_instance = os_client.get_vim_instance()
     return os_tenant_id, vim_instance
-
-
-def get_openstack_credentials():
-    openstack_credential_file_path = get_config().get('system', 'openstack-credentials-file')
-    with open(openstack_credential_file_path, "r") as f:
-        return json.loads(f.read())
 
 
 def get_username_hash(username):

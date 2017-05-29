@@ -30,6 +30,7 @@ setup(
         'openbaton-cli',
         'python-keystoneclient',
         'python-neutronclient',
+        'python-glanceclient',
         'softfire-sdk'
     ],
     long_description=read('README.rst'),

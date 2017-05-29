@@ -30,3 +30,12 @@ def get_config():
 def get_available_nsds():
     with open(get_config().get('system', 'available-nsds-file-path'), 'r') as f:
         return json.loads(f.read())
+
+
+def get_openstack_credentials(testbed_name):
+    openstack_credential_file_path = get_config().get('system', 'openstack-credentials-file')
+    if os.path.exists(openstack_credential_file_path):
+        with open(openstack_credential_file_path + ("/%s.json" % testbed_name), "r") as f:
+            return json.loads(f.read())
+    else:
+        raise FileNotFoundError("Openstack credentials file not found")

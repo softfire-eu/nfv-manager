@@ -1,5 +1,6 @@
 import json
 
+# from utils import os_utils_opnfv
 from utils.utils import get_config
 from sdk.softfire.manager import AbstractManager
 from org.openbaton.cli.agents.agents import OpenBatonAgentFactory
@@ -114,6 +115,11 @@ class OBClient(object):
 
 
 class NfvManager(AbstractManager):
+    def validate_resources(self, user_info=None, payload=None) -> None:
+        # TODO Add validation of resource
+        logger.info("Validating %s " % payload)
+        pass
+
     def refresh_resources(self, user_info):
         """
             List all available images for this tenant
