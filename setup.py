@@ -15,7 +15,7 @@ def read(fname):
 
 setup(
     name="nfv-manager",
-    version="0.1.2b0",
+    version="0.1.2b1",
     author="SoftFIRE",
     author_email="softfire@softfire.eu",
     description="The SoftFIRE NFV Manager",
@@ -31,6 +31,7 @@ setup(
         'python-keystoneclient',
         'python-neutronclient',
         'python-glanceclient',
+        'python-novaclient',
         'softfire-sdk'
     ],
     long_description=read('README.rst'),
