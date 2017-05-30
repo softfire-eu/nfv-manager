@@ -116,6 +116,24 @@ class OBClient(object):
     def list_vim_instances(self):
         return self.agent.get_vim_instance_agent(self.project_id).find()
 
+    def list_images(self):
+        res = []
+        for vim_instance in json.loads(self.agent.get_vim_instance_agent(self.project_id).find()):
+
+            vim_instance_name = vim_instance.get("name")
+            if "-" in vim_instance_name:
+                testbed_name = vim_instance_name.split("-")[-1]
+            else:
+                testbed_name = vim_instance_name
+            for img in vim_instance.get("images"):
+                res.append(
+                    {
+                        "testbed": testbed_name,
+                        "name": img.get("name")
+                    }
+                )
+        return res
+
 
 class NfvManager(AbstractManager):
     def validate_resources(self, user_info=None, payload=None) -> None:
@@ -151,7 +169,8 @@ class NfvManager(AbstractManager):
              :rtype list
             """
         result = []
-        for image in os_utils.list_images(user_info.name):
+        ob_client = OBClient(user_info.name)
+        for image in ob_client.list_images():
             testbed = image.get('testbed')
             resource_id = image.get('name')
             result.append(messages_pb2.ResourceMetadata(resource_id=resource_id,
