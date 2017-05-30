@@ -2,7 +2,7 @@ import json
 import traceback
 
 import neutronclient
-from utils.utils import get_logger, get_config
+from utils.utils import get_logger, get_config, get_openstack_credentials
 from glanceclient import Client as Glance
 from keystoneauth1 import session
 from keystoneauth1.identity import v2
@@ -241,8 +241,11 @@ class OSClient(object):
                 logger.error("Missing tenant_id!")
                 raise OpenstackClientError('Missing tenant_id!')
             self.set_nova(tenant_id)
-
-        return self.glance.images.list()
+        try:
+            imgs = self.nova.images.list()
+            return imgs
+        except:
+            return self.glance.images.list()
 
     def _get_tenant_id_from_name(self, tenant_name):
         for tenant in self.keystone.tenants.list():
@@ -299,8 +302,12 @@ def create_os_project(tenant_name, testbed_name=None):
     os_tenants = {}
     if not testbed_name:
         for name, testbed in openstack_credentials.items():
-            os_tenant_id, vim_instance = _create_single_project(tenant_name, testbed, name)
-            os_tenants[name] = {'tenant_id': os_tenant_id, 'vim_instance': vim_instance}
+            try:
+                os_tenant_id, vim_instance = _create_single_project(tenant_name, testbed, name)
+                os_tenants[name] = {'tenant_id': os_tenant_id, 'vim_instance': vim_instance}
+            except:
+                logger.error("Not able to create project in testbed %s" % name)
+                pass
     else:
         os_tenant_id, vim_instance = _create_single_project(tenant_name,
                                                             openstack_credentials[testbed_name],

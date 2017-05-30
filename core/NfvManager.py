@@ -1,6 +1,9 @@
 import json
 
 # from utils import os_utils_opnfv
+import yaml
+
+from utils.exceptions import NfvResourceValidationError
 from utils.utils import get_config
 from sdk.softfire.manager import AbstractManager
 from org.openbaton.cli.agents.agents import OpenBatonAgentFactory
@@ -117,7 +120,25 @@ class OBClient(object):
 class NfvManager(AbstractManager):
     def validate_resources(self, user_info=None, payload=None) -> None:
         # TODO Add validation of resource
-        logger.info("Validating %s " % payload)
+        request_dict = yaml.load(payload)
+        logger.info("Validating %s " % request_dict)
+
+        resource_id = request_dict.get("properties").get('resource_id')
+        available_nsds = get_available_nsds()
+        if resource_id not in available_nsds.keys():
+            if not request_dict.get("properties").get('file_name'):
+                raise NfvResourceValidationError(
+                    message="Resource id %s not in the available ones %s and no CSAR file provided" % (
+                        resource_id, list(available_nsds.keys())))
+
+        else:
+            testbeds = request_dict.get("properties").get("testbeds")
+            for vnf_type in testbeds.keys():
+                if vnf_type not in available_nsds.get(resource_id).get("vnf_types") and vnf_type.upper() != "ANY":
+                    raise NfvResourceValidationError(
+                        message="Testbeds properties must be a dict containing the vnf type of the NS chosen or ANY, "
+                                "%s not included in the possibilities %s" % (
+                                    vnf_type, available_nsds.get("resource_id").get("vnf_types")))
         pass
 
     def refresh_resources(self, user_info):
@@ -264,4 +285,3 @@ class NfvManager(AbstractManager):
         logger.info("Deleting resources for user: %s" % user_info.name)
         logger.debug("Received this payload: %s" % payload)
         # ob_client.delete_nsr(payload.get("id"))
-

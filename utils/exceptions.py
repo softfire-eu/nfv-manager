@@ -1,3 +1,12 @@
+class BaseException(Exception):
+    def __init__(self, message=None) -> None:
+        super().__init__()
+        self.message = message
 
-class OpenstackClientError(Exception):
+
+class OpenstackClientError(BaseException):
+    pass
+
+
+class NfvResourceValidationError(BaseException):
     pass
