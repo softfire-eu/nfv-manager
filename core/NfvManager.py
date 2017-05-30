@@ -1,7 +1,13 @@
 import json
 
 # from utils import os_utils_opnfv
+import os
+from os import listdir
+
 import yaml
+from os.path import isfile, join
+
+from org.openbaton.cli.errors.errors import NfvoException
 
 from utils.exceptions import NfvResourceValidationError
 from utils.utils import get_config
@@ -73,8 +79,8 @@ class OBClient(object):
     def list_nsds(self):
         return self.agent.get_ns_descriptor_agent(self.project_id).find()
 
-    def create_nsr(self, nsd_id):
-        return self.agent.get_ns_records_agent(self.project_id).create(nsd_id)
+    def create_nsr(self, nsd_id, body=None):
+        return self.agent.get_ns_records_agent(self.project_id).create(nsd_id, body)
 
     def delete_nsr(self, nsr_id):
         return self.agent.get_ns_records_agent(self.project_id).delete(nsr_id)
@@ -134,6 +140,26 @@ class OBClient(object):
                 )
         return res
 
+    def upload_package(self, package_path, name=None):
+        package_agent = self.agent.get_vnf_package_agent(self.project_id)
+        try:
+            return package_agent.create(package_path)
+        except NfvoException as e:
+            if not name:
+                raise e
+            for nsd in json.loads(self.agent.get_ns_descriptor_agent(self.project_id).find()):
+                for vnfd in nsd.get('vnfd'):
+                    if vnfd.get('name') == name:
+                        return {"id": vnfd.get('id')}
+            raise e
+
+    def create_nsd(self, nsd):
+        if isinstance(nsd, dict):
+            nsd = json.dumps(nsd)
+
+        logger.debug("Uplading really: \n%s" % nsd)
+        return self.agent.get_ns_descriptor_agent(self.project_id).create(nsd)
+
 
 class NfvManager(AbstractManager):
     def validate_resources(self, user_info=None, payload=None) -> None:
@@ -182,7 +208,18 @@ class NfvManager(AbstractManager):
 
     def provide_resources(self, user_info, payload=None):
         """
-            Deploy the selected resources
+            Deploy the selected resources. Payload looks like:
+            {
+                'properties': {
+                    'nsd_name': 'my_nsd',
+                    'resource_id': 'open5gcore',
+                    'testbeds': {
+                        'ANY':
+                        'fokus'
+                    }
+                },
+                'type': 'NfvResource'
+            }
 
             :param payload: the resources to be deployed
              :type payload: dict
@@ -191,9 +228,58 @@ class NfvManager(AbstractManager):
              :rtype: ProvideResourceResponse
             """
         ob_client = OBClient(user_info.name)
-        nsr = {"nsr-id": "test_id"}
-        # nsr = ob_client.create_nsr(payload.get("nsd-id"))
-        return messages_pb2.ProvideResourceResponse(resources=nsr)
+        logger.debug("Payload is \n%s" % payload)
+        resource_dict = yaml.load(yaml.load(payload))
+        logger.debug("Received %s " % resource_dict)
+        resource_id = resource_dict.get("properties").get("resource_id")
+        nsd_name = resource_dict.get("properties").get("resource_id")
+        packages_location = "%s/%s" % (get_config().get("system", "packages-location"), resource_id)
+        available_nsds = get_available_nsds()
+        nsd_chosen = available_nsds.get(resource_id)
+        vnfds = []
+        testbeds = resource_dict.get("properties").get("testbeds")
+
+        if os.path.exists(packages_location) and nsd_chosen:
+            for package in [f for f in listdir(packages_location) if isfile(join(packages_location, f))]:
+                vnfds.append({
+                    'id': ob_client.upload_package(join(packages_location, package), package.split('.')[0]).get('id')
+                })
+
+            virtual_links = [{"name": "softfire-internal"}]
+            nsd = {
+                "name": nsd_name,
+                "version": "softfire_version",
+                "vendor": user_info.name,
+                "vnfd": vnfds,
+                "vld": virtual_links
+            }
+
+            logger.debug("Uploading NSD: %s" % nsd)
+
+            nsd = ob_client.create_nsd(nsd)
+
+            logger.debug("Created NSD: %s" % nsd)
+            vdu_vim_instances = {}
+
+            if "ANY" in testbeds.keys():
+                for vdu_name in nsd_chosen.get("vnf_types"):
+                    vdu_vim_instances[vdu_name] = ["vim-instance-%s" % vim_name for vim_name in testbeds.values()]
+            else:
+                for vdu_name in nsd_chosen.get("vnf_types"):
+                    vdu_vim_instances[vdu_name] = [testbeds.get(vdu_name)]
+
+            body = json.dumps({
+                "vduVimInstances": vdu_vim_instances
+            })
+            nsr = ob_client.create_nsr(nsd.get('id'), body=body)
+
+        else:
+            # TODO implement specific deployment
+            nsr = {}
+            # nsr = ob_client.create_nsr(payload.get("nsd-id"))
+        if isinstance(nsr, dict):
+            nsr = json.dumps(nsr)
+        return [nsr]
 
     def create_user(self, username, password):
         """
