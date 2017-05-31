@@ -1,24 +1,24 @@
 import json
-
 # from utils import os_utils_opnfv
 import os
+import time
+import traceback
 from os import listdir
+from os.path import isfile, join
+from threading import Thread
 
 import yaml
-from os.path import isfile, join
-
-from org.openbaton.cli.errors.errors import NfvoException
-
-from utils.exceptions import NfvResourceValidationError
-from utils.utils import get_config
-from sdk.softfire.manager import AbstractManager
 from org.openbaton.cli.agents.agents import OpenBatonAgentFactory
+from org.openbaton.cli.errors.errors import NfvoException
 from org.openbaton.cli.openbaton import LIST_PRINT_KEY
-
-import utils.os_utils as os_utils
 from sdk.softfire.grpc import messages_pb2
+from sdk.softfire.manager import AbstractManager
+from sdk.softfire.utils import TESTBED_MAPPING
+
+from utils.exceptions import NfvResourceValidationError, NfvResourceDeleteException
 from utils.os_utils import create_os_project
-from utils.utils import get_available_nsds, get_logger
+from utils.static_config import CONFIG_FILE_PATH
+from utils.utils import get_available_nsds, get_logger, get_config
 
 logger = get_logger(__name__)
 
@@ -28,19 +28,24 @@ CARDINALITY = {
     'open5gcore': 1,
 }
 
-TESTBED_MAPPING = {
-    'fokus': messages_pb2.FOKUS,
-    'fokus-dev': messages_pb2.FOKUS_DEV,
-    'ericsson': messages_pb2.ERICSSON,
-    'ericsson-dev': messages_pb2.ERICSSON_DEV,
-    'surrey': messages_pb2.SURREY,
-    'surrey-dev': messages_pb2.SURREY_DEV,
-    'ads': messages_pb2.ADS,
-    'ads-dev': messages_pb2.ADS_DEV,
-    'dt': messages_pb2.DT,
-    'dt-dev': messages_pb2.DT_DEV,
-    'any': messages_pb2.ANY
-}
+
+class UpdateStatusThread(Thread):
+    def __init__(self, nfv_manager):
+        Thread.__init__(self)
+        self.stopped = False
+        self.nfv_manager = nfv_manager
+
+    def run(self):
+        while not self.stopped:
+            time.sleep(int(self.nfv_manager.get_config_value('system', 'update-delay', '10')))
+            if not self.stopped:
+                try:
+                    self.nfv_manager.send_update()
+                except Exception as e:
+                    logger.error("got error while updating resources: %s " % e.args)
+
+    def stop(self):
+        self.stopped = True
 
 
 class OBClient(object):
@@ -51,15 +56,16 @@ class OBClient(object):
         
         :param project_name: the project of a specific user.
         """
-        config = get_config()
-        https = config.getboolean("nfvo", "https")
+        https = get_config("nfvo", "https", CONFIG_FILE_PATH).lower() == 'true'
 
-        username = config.get("nfvo", "username")
+        username = get_config("nfvo", "username", CONFIG_FILE_PATH)
 
-        password = config.get("nfvo", "password")
+        password = get_config("nfvo", "password", CONFIG_FILE_PATH)
 
-        self.agent = OpenBatonAgentFactory(nfvo_ip=config.get("nfvo", "ip"),
-                                           nfvo_port=config.get("nfvo", "port"),
+        nfvo_ip = get_config("nfvo", "ip", CONFIG_FILE_PATH)
+        nfvo_port = get_config("nfvo", "port", CONFIG_FILE_PATH)
+        self.agent = OpenBatonAgentFactory(nfvo_ip=nfvo_ip,
+                                           nfvo_port=nfvo_port,
                                            https=https,
                                            version=1,
                                            username=username,
@@ -160,8 +166,51 @@ class OBClient(object):
         logger.debug("Uplading really: \n%s" % nsd)
         return self.agent.get_ns_descriptor_agent(self.project_id).create(nsd)
 
+    def get_nsd(self, nsd_id):
+        return self.agent.get_ns_descriptor_agent(self.project_id).find(nsd_id)
+
+    def delete_nsd(self, nsd_id):
+        self.agent.get_ns_descriptor_agent(self.project_id).delete(nsd_id)
+
+    def delete_vnfd(self, vnfd_id):
+        self.agent.get_vnf_descriptor_agent(self.project_id).delete(vnfd_id)
+
+    def get_nsr(self, nsr_id):
+        return self.agent.get_ns_records_agent(self.project_id).find(nsr_id)
+
+
+def get_nsrs_to_check():
+    if os.path.exists(get_config('system', 'nsr-to-check', CONFIG_FILE_PATH, '/etc/softfire/nsr-to-check.json')):
+        with open(get_config('system', 'nsr-to-check', CONFIG_FILE_PATH, '/etc/softfire/nsr-to-check.json'), 'r+') as f:
+            return json.loads(f.read())
+    return {}
+
+
+def add_nsr_to_check(username, nsr):
+    nsr_to_check = get_nsrs_to_check()
+    if not nsr_to_check.get(username):
+        nsr_to_check[username] = []
+    nsr_to_check[username].append(nsr)
+    with open(get_config('system', 'nsr-to-check', CONFIG_FILE_PATH, '/etc/softfire/nsr-to-check.json'), 'w+') as f:
+        f.write(json.dumps(nsr_to_check))
+
+
+def remove_nsr_to_check(username, nsr_id):
+    nsr_to_check = get_nsrs_to_check()
+    nsrs = nsr_to_check.get(username)
+    for index in range(0, len(nsrs) - 1):
+        if nsrs[index].get('id') == nsr_id:
+            del nsrs[index]
+            with open(get_config('system', 'nsr-to-check', CONFIG_FILE_PATH, '/etc/softfire/nsr-to-check.json'),
+                      'w+') as f:
+                f.write(json.dumps(nsr_to_check))
+            return
+
 
 class NfvManager(AbstractManager):
+    def __init__(self, config_file_path):
+        super().__init__(config_file_path)
+
     def validate_resources(self, user_info=None, payload=None) -> None:
         # TODO Add validation of resource
         request_dict = yaml.load(payload)
@@ -189,8 +238,7 @@ class NfvManager(AbstractManager):
         """
             List all available images for this tenant
 
-            :param tenant_name: the tenant name
-             :type tenant_name: str
+            :param user_info:
             :return: the list of ResourceMetadata
              :rtype list
             """
@@ -233,7 +281,7 @@ class NfvManager(AbstractManager):
         logger.debug("Received %s " % resource_dict)
         resource_id = resource_dict.get("properties").get("resource_id")
         nsd_name = resource_dict.get("properties").get("resource_id")
-        packages_location = "%s/%s" % (get_config().get("system", "packages-location"), resource_id)
+        packages_location = "%s/%s" % (self.get_config_value("system", "packages-location"), resource_id)
         available_nsds = get_available_nsds()
         nsd_chosen = available_nsds.get(resource_id)
         vnfds = []
@@ -241,8 +289,9 @@ class NfvManager(AbstractManager):
 
         if os.path.exists(packages_location) and nsd_chosen:
             for package in [f for f in listdir(packages_location) if isfile(join(packages_location, f))]:
+                vnfd = ob_client.upload_package(join(packages_location, package), package.split('.')[0])
                 vnfds.append({
-                    'id': ob_client.upload_package(join(packages_location, package), package.split('.')[0]).get('id')
+                    'id': vnfd.get('id')
                 })
 
             virtual_links = [{"name": "softfire-internal"}]
@@ -273,6 +322,8 @@ class NfvManager(AbstractManager):
             })
             nsr = ob_client.create_nsr(nsd.get('id'), body=body)
 
+            add_nsr_to_check(user_info.name, nsr)
+
         else:
             # TODO implement specific deployment
             nsr = {}
@@ -281,18 +332,17 @@ class NfvManager(AbstractManager):
             nsr = json.dumps(nsr)
         return [nsr]
 
-    def create_user(self, username, password):
+    def create_user(self, user_info):
         """
             Create project in Open Stack and upload the new vim to Open Baton
 
-            :param name: the username of the user, used here also as tenant name
-             :type name: string
-            :param password: the password of the user
-             :type password: string
+            :param user_info:
             :return: the new user info updated
              :rtype: UserInfo
 
             """
+        username = user_info.name
+        password = user_info.password
         os_tenants = create_os_project(tenant_name=username)
         ob_client = OBClient()
         project = {
@@ -317,17 +367,12 @@ class NfvManager(AbstractManager):
         user = ob_client.create_user(user)
         logger.debug("Create openbaton user %s" % user)
 
-        user_info = messages_pb2.UserInfo(
-            name=username,
-            password=password,
-            ob_project_id=project.get('id'),
-            testbed_tenants={}
-        )
+        user_info.ob_project_id = project.get('id')
+        # user_info.testbed_tenants = {}
 
         testbed_tenants = {}
 
         for testbed_name, v in os_tenants.items():
-            # v == {'tenant_id': os_tenant_id, 'vim_instance': vim_instance}
             tenant_id = v.get('tenant_id')
             vim_instance = v.get('vim_instance')
             vi = ob_client.create_vim_instance(vim_instance)
@@ -389,4 +434,74 @@ class NfvManager(AbstractManager):
 
         logger.info("Deleting resources for user: %s" % user_info.name)
         logger.debug("Received this payload: %s" % payload)
-        # ob_client.delete_nsr(payload.get("id"))
+        nsrs = json.loads(payload)
+        for nsr in nsrs:
+            nsd_id = nsr.get('descriptor_reference')
+            try:
+                nsd = json.loads(ob_client.get_nsd(nsd_id))
+            except NfvoException:
+                traceback.print_exc()
+                return
+            vnfd_ids = []
+            for vnfd in nsd.get('vnfd'):
+                vnfd_ids.append(vnfd.get('id'))
+
+            try:
+                self.try_delete_nsr(nsr, ob_client)
+
+                self.try_delete_nsd(nsd_id, ob_client)
+                # TODO to be added if cascade is not enabled
+                # for vnfd_id in vnfd_ids:
+                #     self.try_delete_vnfd(vnfd_id, ob_client)
+            except NfvResourceDeleteException as e:
+                traceback.print_exc()
+                logger.error("...ignoring...")
+
+            remove_nsr_to_check(user_info.name, nsr.get('id'))
+
+    def try_delete_nsr(self, nsr, ob_client):
+        try:
+            ob_client.delete_nsr(nsr.get('id'))
+        except:
+            raise NfvResourceDeleteException('Not able to delete NSR with id: %s' % nsr.get('id'))
+        timer = 500
+        time.sleep(5)
+        while True:
+            try:
+                nsr = json.loads(ob_client.get_nsr(nsr.get('id')))
+                if timer == 0:
+                    raise NfvResourceDeleteException('Not able to delete NSR with id: %s' % nsr.get('id'))
+            except NfvoException:
+                return
+            timer -= 1
+            time.sleep(2)
+
+    def try_delete_nsd(self, nsd_id, ob_client):
+        try:
+            ob_client.delete_nsd(nsd_id)
+        except:
+            raise NfvResourceDeleteException('Not able to delete NSD with id: %s' % nsd_id)
+
+    def try_delete_vnfd(self, vnfd_id, ob_client):
+        try:
+            ob_client.delete_vnfd(vnfd_id)
+        except:
+            raise NfvResourceDeleteException('Not able to delete VNFD with id: %s' % vnfd_id)
+
+    def _update_status(self) -> dict:
+        logger.debug("Checking status update")
+        result = {}
+        for username, nsrs in get_nsrs_to_check().items():
+            logger.debug("Checking resources of user %s" % username)
+            if len(nsrs):
+                ob_client = OBClient(username)
+                result[username] = []
+                for nsr in nsrs:
+                    nsr_new = ob_client.get_nsr(nsr.get('id'))
+                    if isinstance(nsr_new,dict):
+                        nsr_new = json.dumps(nsr_new)
+                    status = json.loads(nsr_new).get('status')
+                    result[username].append(nsr_new)
+
+                    # result[username].append(json.dumps(nsr))
+        return result
