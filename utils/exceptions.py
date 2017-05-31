@@ -10,3 +10,7 @@ class OpenstackClientError(BaseException):
 
 class NfvResourceValidationError(BaseException):
     pass
+
+
+class NfvResourceDeleteException(BaseException):
+    pass

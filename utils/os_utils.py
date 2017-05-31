@@ -1,8 +1,6 @@
-import json
 import traceback
 
 import neutronclient
-from utils.utils import get_logger, get_config, get_openstack_credentials
 from glanceclient import Client as Glance
 from keystoneauth1 import session
 from keystoneauth1.identity import v2
@@ -12,6 +10,7 @@ from neutronclient.v2_0.client import Client as Neutron
 from novaclient.client import Client as Nova
 
 from utils.exceptions import OpenstackClientError
+from utils.utils import get_logger, get_config, get_openstack_credentials
 
 logger = get_logger(__name__)
 
@@ -347,8 +346,8 @@ def _create_single_project(tenant_name, testbed, testbed_name):
         )
         raise OpenstackClientError("A shared External Network called softfire-network must exist! "
                                    "Please create one in your openstack instance")
-    networks, subnets, router_id = os_client.create_networks_and_subnets(ext_net)
-    logger.debug("Created Network %s, Subnet %s, Router %s" % (networks, subnets, router_id))
+    # networks, subnets, router_id = os_client.create_networks_and_subnets(ext_net)
+    # logger.debug("Created Network %s, Subnet %s, Router %s" % (networks, subnets, router_id))
 
     fips = testbed.get("allocate-fip")
     if fips is not None and int(fips) > 0:
