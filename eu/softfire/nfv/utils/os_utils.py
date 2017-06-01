@@ -311,11 +311,12 @@ def create_os_project(tenant_name, testbed_name=None):
             try:
                 logger.info("Creating project on testbed: %s" % name)
                 os_tenant_id, vim_instance = _create_single_project(tenant_name, testbed, name)
+                logger.info("Created project %s on testbed: %s" % (os_tenant_id, name))
                 os_tenants[name] = {'tenant_id': os_tenant_id, 'vim_instance': vim_instance}
             except:
                 logger.error("Not able to create project in testbed %s" % name)
                 traceback.print_exc()
-                pass
+                return
     else:
         os_tenant_id, vim_instance = _create_single_project(tenant_name,
                                                             openstack_credentials[testbed_name],
