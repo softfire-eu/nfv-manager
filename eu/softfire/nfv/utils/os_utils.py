@@ -1,5 +1,6 @@
 import traceback
 
+import logging
 import neutronclient
 from glanceclient import Client as Glance
 from keystoneauth1 import session
@@ -31,18 +32,24 @@ class OSClient(object):
         self.keypair = None
         self.sec_group = None
         self.os_tenant_id = None
+        logger.debug("Log level is: %s and DEBUG is %s" % (logger.getEffectiveLevel(), logging.DEBUG))
+        if logger.getEffectiveLevel() == logging.DEBUG:
+            logging.basicConfig(level=logging.DEBUG)
         if not tenant_name:
+            logger.debug("Creating keystone client")
             self.keystone = ks_client.Client(auth_url=self.auth_url,
                                              username=self.username,
                                              password=self.password,
                                              tenant_name=self.admin_tenant_name)
+            logger.debug("Created Keystone client %s" % self.keystone)
         else:
             self.tenant_name = tenant_name
-
+            logger.debug("Creating keystone client")
             self.keystone = ks_client.Client(auth_url=self.auth_url,
                                              username=self.username,
                                              password=self.password,
                                              tenant_name=tenant_name)
+            logger.debug("Created Keystone client %s" % self.keystone)
             self.os_tenant_id = self._get_tenant_id_from_name(self.tenant_name)
             self.set_nova(self.os_tenant_id)
             self.set_neutron(self.os_tenant_id)
@@ -302,6 +309,7 @@ def create_os_project(tenant_name, testbed_name=None):
     if not testbed_name:
         for name, testbed in openstack_credentials.items():
             try:
+                logger.info("Creating project on testbed: %s" % name)
                 os_tenant_id, vim_instance = _create_single_project(tenant_name, testbed, name)
                 os_tenants[name] = {'tenant_id': os_tenant_id, 'vim_instance': vim_instance}
             except:
@@ -317,10 +325,12 @@ def create_os_project(tenant_name, testbed_name=None):
 
 def _create_single_project(tenant_name, testbed, testbed_name):
     os_client = OSClient(testbed_name, testbed)
-
+    logger.info("Created OSClient")
     os_tenant_id = None
     user = os_client.get_user()
+    logger.debug("Got User %s" % user)
     role = os_client.get_role('admin')
+    logger.debug("Got Role %s" % role)
     for tenant in os_client.list_tenants():
         if tenant.name == tenant_name:
             logger.warn("Tenant with name or id %s exists already! I assume a double registration i will not do "
@@ -330,8 +340,9 @@ def _create_single_project(tenant_name, testbed, testbed_name):
     if os_tenant_id is None:
         tenant = os_client.create_tenant(tenant_name=tenant_name,
                                          description='openbaton tenant for user %s' % tenant_name)
+        logger.debug("Created tenant %s" % tenant)
         os_tenant_id = tenant.id
-        logger.debug("Created tenant with id: %s" % os_tenant_id)
+        logger.info("Created tenant with id: %s" % os_tenant_id)
     os_client.add_user_role(user=user, role=role, tenant=os_tenant_id)
     os_client = OSClient(testbed_name, testbed, tenant_name)
 
