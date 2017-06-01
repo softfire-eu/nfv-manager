@@ -2,7 +2,7 @@ import unittest
 
 from org.openbaton.cli.agents.agents import OpenBatonAgentFactory
 
-from utils import get_config
+from eu.softfire.nfv.utils import get_config
 
 
 class MyTestCase(unittest.TestCase):

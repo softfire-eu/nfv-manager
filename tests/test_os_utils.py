@@ -1,8 +1,7 @@
+import logging
 import unittest
 
-import logging
-
-from utils import os_utils, utils
+from eu.softfire.nfv.utils import utils
 
 TESTBED_UNDER_TEST = 'fokus'
 TENANTS = {

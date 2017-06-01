@@ -15,10 +15,10 @@ from sdk.softfire.grpc import messages_pb2
 from sdk.softfire.manager import AbstractManager
 from sdk.softfire.utils import TESTBED_MAPPING
 
-from utils.exceptions import NfvResourceValidationError, NfvResourceDeleteException
-from utils.os_utils import create_os_project
-from utils.static_config import CONFIG_FILE_PATH
-from utils.utils import get_available_nsds, get_logger, get_config
+from eu.softfire.nfv.utils.exceptions import NfvResourceValidationError, NfvResourceDeleteException
+from eu.softfire.nfv.utils.os_utils import create_os_project
+from eu.softfire.nfv.utils.static_config import CONFIG_FILE_PATH
+from eu.softfire.nfv.utils.utils import get_available_nsds, get_logger, get_config
 
 logger = get_logger(__name__)
 
@@ -212,7 +212,6 @@ class NfvManager(AbstractManager):
         super().__init__(config_file_path)
 
     def validate_resources(self, user_info=None, payload=None) -> None:
-        # TODO Add validation of resource
         request_dict = yaml.load(payload)
         logger.info("Validating %s " % request_dict)
 
@@ -498,7 +497,7 @@ class NfvManager(AbstractManager):
                 result[username] = []
                 for nsr in nsrs:
                     nsr_new = ob_client.get_nsr(nsr.get('id'))
-                    if isinstance(nsr_new,dict):
+                    if isinstance(nsr_new, dict):
                         nsr_new = json.dumps(nsr_new)
                     status = json.loads(nsr_new).get('status')
                     result[username].append(nsr_new)

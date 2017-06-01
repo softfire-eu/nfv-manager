@@ -1,6 +1,6 @@
 from sdk.softfire.main import start_manager
 
-from core.NfvManager import NfvManager, UpdateStatusThread
+from eu.softfire.nfv.core.NfvManager import NfvManager, UpdateStatusThread
 
 
 def start():

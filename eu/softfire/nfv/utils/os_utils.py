@@ -9,8 +9,8 @@ from neutronclient.common.exceptions import IpAddressGenerationFailureClient
 from neutronclient.v2_0.client import Client as Neutron
 from novaclient.client import Client as Nova
 
-from utils.exceptions import OpenstackClientError
-from utils.utils import get_logger, get_config, get_openstack_credentials
+from eu.softfire.nfv.utils.exceptions import OpenstackClientError
+from eu.softfire.nfv.utils.utils import get_logger, get_config, get_openstack_credentials
 
 logger = get_logger(__name__)
 

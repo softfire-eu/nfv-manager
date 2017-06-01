@@ -5,7 +5,7 @@ import os
 
 from sdk.softfire.utils import get_config
 
-from utils.static_config import CONFIG_FILE_PATH
+from eu.softfire.nfv.utils.static_config import CONFIG_FILE_PATH
 
 
 def get_logger(name):
