@@ -276,7 +276,7 @@ class NfvManager(AbstractManager):
             """
         ob_client = OBClient(user_info.name)
         logger.debug("Payload is \n%s" % payload)
-        resource_dict = yaml.load(yaml.load(payload))
+        resource_dict = yaml.load(payload)
         logger.debug("Received %s " % resource_dict)
         resource_id = resource_dict.get("properties").get("resource_id")
         nsd_name = resource_dict.get("properties").get("resource_id")
