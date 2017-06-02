@@ -434,30 +434,29 @@ class NfvManager(AbstractManager):
 
         logger.info("Deleting resources for user: %s" % user_info.name)
         logger.debug("Received this payload: %s" % payload)
-        nsrs = json.loads(payload)
-        for nsr in nsrs:
-            nsd_id = nsr.get('descriptor_reference')
-            try:
-                nsd = json.loads(ob_client.get_nsd(nsd_id))
-            except NfvoException:
-                traceback.print_exc()
-                return
-            vnfd_ids = []
-            for vnfd in nsd.get('vnfd'):
-                vnfd_ids.append(vnfd.get('id'))
+        nsr = json.loads(payload)
+        nsd_id = nsr.get('descriptor_reference')
+        try:
+            nsd = json.loads(ob_client.get_nsd(nsd_id))
+        except NfvoException:
+            traceback.print_exc()
+            return
+        vnfd_ids = []
+        for vnfd in nsd.get('vnfd'):
+            vnfd_ids.append(vnfd.get('id'))
 
-            try:
-                self.try_delete_nsr(nsr, ob_client)
+        try:
+            self.try_delete_nsr(nsr, ob_client)
 
-                self.try_delete_nsd(nsd_id, ob_client)
-                # TODO to be added if cascade is not enabled
-                # for vnfd_id in vnfd_ids:
-                #     self.try_delete_vnfd(vnfd_id, ob_client)
-            except NfvResourceDeleteException as e:
-                traceback.print_exc()
-                logger.error("...ignoring...")
+            self.try_delete_nsd(nsd_id, ob_client)
+            # TODO to be added if cascade is not enabled
+            # for vnfd_id in vnfd_ids:
+            #     self.try_delete_vnfd(vnfd_id, ob_client)
+        except NfvResourceDeleteException as e:
+            traceback.print_exc()
+            logger.error("...ignoring...")
 
-            remove_nsr_to_check(user_info.name, nsr.get('id'))
+        remove_nsr_to_check(user_info.name, nsr.get('id'))
 
     def try_delete_nsr(self, nsr, ob_client):
         try:
