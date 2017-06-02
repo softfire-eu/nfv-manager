@@ -212,6 +212,7 @@ class NfvManager(AbstractManager):
         super().__init__(config_file_path)
 
     def validate_resources(self, user_info=None, payload=None) -> None:
+
         request_dict = yaml.load(payload)
         logger.info("Validating %s " % request_dict)
 
@@ -276,7 +277,7 @@ class NfvManager(AbstractManager):
             """
         ob_client = OBClient(user_info.name)
         logger.debug("Payload is \n%s" % payload)
-        resource_dict = yaml.load(payload)
+        resource_dict = json.loads(payload)
         logger.debug("Received %s " % resource_dict)
         resource_id = resource_dict.get("properties").get("resource_id")
         nsd_name = resource_dict.get("properties").get("resource_id")
