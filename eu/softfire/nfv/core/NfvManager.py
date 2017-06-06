@@ -14,7 +14,10 @@ from org.openbaton.cli.openbaton import LIST_PRINT_KEY
 from sdk.softfire.grpc import messages_pb2
 from sdk.softfire.manager import AbstractManager
 from sdk.softfire.utils import TESTBED_MAPPING
+from sqlalchemy.orm.exc import NoResultFound
 
+from eu.softfire.nfv.db.entities import Nsr
+from eu.softfire.nfv.db.repositories import find, delete, save
 from eu.softfire.nfv.utils.exceptions import NfvResourceValidationError, NfvResourceDeleteException
 from eu.softfire.nfv.utils.os_utils import create_os_project
 from eu.softfire.nfv.utils.static_config import CONFIG_FILE_PATH
@@ -198,31 +201,31 @@ class OBClient(object):
 
 
 def get_nsrs_to_check():
-    if os.path.exists(get_config('system', 'nsr-to-check', CONFIG_FILE_PATH, '/etc/softfire/nsr-to-check.json')):
-        with open(get_config('system', 'nsr-to-check', CONFIG_FILE_PATH, '/etc/softfire/nsr-to-check.json'), 'r+') as f:
-            return json.loads(f.read())
-    return {}
+    return find(Nsr)
 
 
 def add_nsr_to_check(username, nsr):
-    nsr_to_check = get_nsrs_to_check()
-    if not nsr_to_check.get(username):
-        nsr_to_check[username] = []
-    nsr_to_check[username].append(nsr)
-    with open(get_config('system', 'nsr-to-check', CONFIG_FILE_PATH, '/etc/softfire/nsr-to-check.json'), 'w+') as f:
-        f.write(json.dumps(nsr_to_check))
+    try:
+        nsr_exists = find(Nsr, _id=nsr.get('id'))
+        if nsr_exists:
+            delete(nsr_exists)
+    except NoResultFound:
+        pass
+
+    nsr_to_save = Nsr()
+    nsr_to_save.username = username
+    nsr_to_save.id = nsr.get('id')
+    nsr_to_save.vnf_log_url = {}
+
+    for vnfr in nsr.get('vnfr'):
+        for vdu in vnfr.get('vdu'):
+            for vnfc_instance in vdu.get('vnfcInstance'):
+                nsr_to_save.vnf_log_url[vnfr.get('name')] = vnfc_instance.get('hostname')
+    save(nsr_to_save)
 
 
-def remove_nsr_to_check(username, nsr_id):
-    nsr_to_check = get_nsrs_to_check()
-    nsrs = nsr_to_check.get(username)
-    for index in range(0, len(nsrs) - 1):
-        if nsrs[index].get('id') == nsr_id:
-            del nsrs[index]
-            with open(get_config('system', 'nsr-to-check', CONFIG_FILE_PATH, '/etc/softfire/nsr-to-check.json'),
-                      'w+') as f:
-                f.write(json.dumps(nsr_to_check))
-            return
+def remove_nsr_to_check(nsr_id):
+    delete(find(Nsr, _id=nsr_id))
 
 
 class NfvManager(AbstractManager):
@@ -366,7 +369,7 @@ class NfvManager(AbstractManager):
             """
         username = user_info.name
         password = user_info.password
-        os_tenants = create_os_project(username=username, password=password,tenant_name=username)
+        os_tenants = create_os_project(username=username, password=password, tenant_name=username)
         ob_client = OBClient()
         project = {
             'name': username,
@@ -479,7 +482,7 @@ class NfvManager(AbstractManager):
             traceback.print_exc()
             logger.error("...ignoring...")
 
-        remove_nsr_to_check(user_info.name, nsr.get('id'))
+        remove_nsr_to_check(nsr.get('id'))
 
     def try_delete_nsr(self, nsr, ob_client):
         try:
@@ -511,19 +514,27 @@ class NfvManager(AbstractManager):
             raise NfvResourceDeleteException('Not able to delete VNFD with id: %s' % vnfd_id)
 
     def _update_status(self) -> dict:
-        logger.debug("Checking status update")
         result = {}
-        for username, nsrs in get_nsrs_to_check().items():
-            logger.debug("Checking resources of user %s" % username)
-            if len(nsrs):
-                ob_client = OBClient(username)
-                result[username] = []
+        for nsrs in get_nsrs_to_check():
+            if isinstance(nsrs, list):
                 for nsr in nsrs:
-                    nsr_new = ob_client.get_nsr(nsr.get('id'))
-                    if isinstance(nsr_new, dict):
-                        nsr_new = json.dumps(nsr_new)
-                    status = json.loads(nsr_new).get('status')
-                    result[username].append(nsr_new)
+                    if not result.get(nsr.username):
+                        result[nsr.username] = []
+                    nsr_new = self._update_nsr(nsr)
+                    result[nsr.username].append(nsr_new)
+            else:
+                if not result.get(nsrs.username):
+                    result[nsrs.username] = []
+                nsr_new = self._update_nsr(nsrs)
+                result[nsrs.username].append(nsr_new)
 
-                    # result[username].append(json.dumps(nsr))
         return result
+
+    def _update_nsr(self, nsr):
+        logger.debug("Checking resources of user %s, nsr id %s" % (nsr.username, nsr.id))
+        ob_client = OBClient(nsr.username)
+        nsr_new = ob_client.get_nsr(nsr.id)
+        if isinstance(nsr_new, dict):
+            nsr_new = json.dumps(nsr_new)
+        logger.debug("Status is: %s" % json.loads(nsr_new).get('status'))
+        return nsr_new
