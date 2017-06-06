@@ -32,7 +32,8 @@ setup(
         'python-neutronclient',
         'python-glanceclient',
         'python-novaclient',
-        'softfire-sdk'
+        'softfire-sdk',
+        'sqlalchemy',
     ],
     long_description=read('README.rst'),
     classifiers=[
