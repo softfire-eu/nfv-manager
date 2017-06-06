@@ -219,13 +219,18 @@ def add_nsr_to_check(username, nsr):
 
     for vnfr in nsr.get('vnfr'):
         for vdu in vnfr.get('vdu'):
-            for vnfc_instance in vdu.get('vnfcInstance'):
-                nsr_to_save.vnf_log_url[vnfr.get('name')] = vnfc_instance.get('hostname')
+            for vnfc_instance in vdu.get('vnfc_instance'):
+                if not nsr_to_save.vnf_log_url.get(vnfr.get('name')):
+                    nsr_to_save.vnf_log_url[vnfr.get('name')] = ""
+                nsr_to_save.vnf_log_url[vnfr.get('name')] += "%s;" % vnfc_instance.get('hostname')
     save(nsr_to_save)
 
 
 def remove_nsr_to_check(nsr_id):
-    delete(find(Nsr, _id=nsr_id))
+    try:
+        delete(find(Nsr, _id=nsr_id))
+    except NoResultFound:
+        pass
 
 
 class NfvManager(AbstractManager):
@@ -523,6 +528,7 @@ class NfvManager(AbstractManager):
                     nsr_new = self._update_nsr(nsr)
                     result[nsr.username].append(nsr_new)
             else:
+                logger.debug("pickle is %s" % nsrs.vnf_log_url)
                 if not result.get(nsrs.username):
                     result[nsrs.username] = []
                 nsr_new = self._update_nsr(nsrs)
@@ -534,7 +540,6 @@ class NfvManager(AbstractManager):
         logger.debug("Checking resources of user %s, nsr id %s" % (nsr.username, nsr.id))
         ob_client = OBClient(nsr.username)
         nsr_new = ob_client.get_nsr(nsr.id)
-        if isinstance(nsr_new, dict):
-            nsr_new = json.dumps(nsr_new)
+        add_nsr_to_check(nsr.username, json.loads(nsr_new))
         logger.debug("Status is: %s" % json.loads(nsr_new).get('status'))
         return nsr_new
