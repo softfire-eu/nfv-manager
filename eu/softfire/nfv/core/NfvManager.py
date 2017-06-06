@@ -178,6 +178,24 @@ class OBClient(object):
     def get_nsr(self, nsr_id):
         return self.agent.get_ns_records_agent(self.project_id).find(nsr_id)
 
+    def import_key(self, ssh_pub_key, name):
+
+        key_agent = self.agent.get_key_agent(self.project_id)
+        for key in json.loads(key_agent.find()):
+            if key.get('name') == name:
+                key_agent.delete(key.get('id'))
+                break
+
+        key_agent.create(
+            json.dumps(
+                {
+                    'name': name,
+                    'projectId': self.project_id,
+                    'publicKey': ssh_pub_key
+                }
+            )
+        )
+
 
 def get_nsrs_to_check():
     if os.path.exists(get_config('system', 'nsr-to-check', CONFIG_FILE_PATH, '/etc/softfire/nsr-to-check.json')):
@@ -276,11 +294,15 @@ class NfvManager(AbstractManager):
              :rtype: ProvideResourceResponse
             """
         ob_client = OBClient(user_info.name)
+
         logger.debug("Payload is \n%s" % payload)
         resource_dict = json.loads(payload)
         logger.debug("Received %s " % resource_dict)
+        ssh_pub_key = resource_dict.get("properties").get('ssh_pub_key')
         resource_id = resource_dict.get("properties").get("resource_id")
         nsd_name = resource_dict.get("properties").get("resource_id")
+        if ssh_pub_key:
+            ob_client.import_key(ssh_pub_key, nsd_name)
         packages_location = "%s/%s" % (self.get_config_value("system", "packages-location"), resource_id)
         available_nsds = get_available_nsds()
         nsd_chosen = available_nsds.get(resource_id)
@@ -318,7 +340,8 @@ class NfvManager(AbstractManager):
                     vdu_vim_instances[vdu_name] = [testbeds.get(vdu_name)]
 
             body = json.dumps({
-                "vduVimInstances": vdu_vim_instances
+                "vduVimInstances": vdu_vim_instances,
+                "keys": [nsd_name]
             })
             nsr = ob_client.create_nsr(nsd.get('id'), body=body)
 
