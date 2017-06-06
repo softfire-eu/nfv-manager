@@ -366,7 +366,7 @@ class NfvManager(AbstractManager):
             """
         username = user_info.name
         password = user_info.password
-        os_tenants = create_os_project(tenant_name=username)
+        os_tenants = create_os_project(username=username, password=password,tenant_name=username)
         ob_client = OBClient()
         project = {
             'name': username,

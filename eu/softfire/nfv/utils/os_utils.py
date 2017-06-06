@@ -1,6 +1,6 @@
+import logging
 import traceback
 
-import logging
 import neutronclient
 from glanceclient import Client as Glance
 from keystoneauth1 import session
@@ -68,10 +68,14 @@ class OSClient(object):
                                    tenant_id=self.os_tenant_id,
                                    auth_url=self.auth_url)
 
-    def get_user(self):
+    def get_user(self, username=None):
         users = self.keystone.users.list()
+        if username:
+            un = username
+        else:
+            un = self.username
         for user in users:
-            if user.name == self.username:
+            if user.name == un:
                 return user
 
     def get_role(self, role_to_find):
@@ -214,7 +218,15 @@ class OSClient(object):
         self.sec_group = sec_group['security_group']
         return self.sec_group
 
-    def get_vim_instance(self, tenant_name=None):
+    def get_vim_instance(self, tenant_name=None, username=None, password=None):
+        if username:
+            un = username
+        else:
+            un = self.username
+        if password:
+            pwd = password
+        else:
+            pwd = self.password
         if tenant_name:
             self.tenant_name = tenant_name
         tenant_id_from_name = self._get_tenant_id_from_name(tenant_name)
@@ -227,8 +239,8 @@ class OSClient(object):
             "name": "vim-instance-%s" % self.testbed_name,
             "authUrl": self.auth_url,
             "tenant": self.tenant_name,
-            "username": self.username,
-            "password": self.password,
+            "username": un,
+            "password": pwd,
             "keyPair": self.keypair,
             "securityGroups": [
                 self.sec_group['name']
@@ -272,6 +284,9 @@ class OSClient(object):
             if t.id == os_tenant_id:
                 return t.name
 
+    def create_user(self, username, password, tenant_id=None):
+        return self.keystone.users.create(username, password, tenant_id=tenant_id)
+
 
 def _list_images_single_tenant(tenant_name, testbed, testbed_name):
     os_client = OSClient(testbed_name, testbed, tenant_name)
@@ -303,14 +318,14 @@ def list_images(tenant_name, testbed_name=None):
     return images
 
 
-def create_os_project(tenant_name, testbed_name=None):
+def create_os_project(username, password, tenant_name, testbed_name=None):
     openstack_credentials = get_openstack_credentials()
     os_tenants = {}
     if not testbed_name:
         for name, testbed in openstack_credentials.items():
             try:
                 logger.info("Creating project on testbed: %s" % name)
-                os_tenant_id, vim_instance = _create_single_project(tenant_name, testbed, name)
+                os_tenant_id, vim_instance = _create_single_project(tenant_name, testbed, name, username, password)
                 logger.info("Created project %s on testbed: %s" % (os_tenant_id, name))
                 os_tenants[name] = {'tenant_id': os_tenant_id, 'vim_instance': vim_instance}
             except:
@@ -325,7 +340,7 @@ def create_os_project(tenant_name, testbed_name=None):
     return os_tenants
 
 
-def _create_single_project(tenant_name, testbed, testbed_name):
+def _create_single_project(tenant_name, testbed, testbed_name, username, password):
     os_client = OSClient(testbed_name, testbed)
     logger.info("Created OSClient")
     os_tenant_id = None
@@ -338,13 +353,22 @@ def _create_single_project(tenant_name, testbed, testbed_name):
             logger.warn("Tenant with name or id %s exists already! I assume a double registration i will not do "
                         "anything :)" % tenant_name)
             logger.warn("returning tenant id %s" % tenant.id)
-            return tenant.id, os_client.get_vim_instance(tenant_name)
+
+            exp_user = os_client.get_user(username)
+            if not exp_user:
+                exp_user = os_client.create_user(username, password)
+                role = os_client.get_role('_member_')
+                os_client.add_user_role(user=exp_user, role=role, tenant=tenant.id)
+            return tenant.id, os_client.get_vim_instance(tenant_name, username, password)
     if os_tenant_id is None:
         tenant = os_client.create_tenant(tenant_name=tenant_name,
                                          description='openbaton tenant for user %s' % tenant_name)
         logger.debug("Created tenant %s" % tenant)
         os_tenant_id = tenant.id
         logger.info("Created tenant with id: %s" % os_tenant_id)
+
+    user = os_client.create_user(username, password)
+    role = os_client.get_role('_member_')
     os_client.add_user_role(user=user, role=role, tenant=os_tenant_id)
     os_client = OSClient(testbed_name, testbed, tenant_name)
 
