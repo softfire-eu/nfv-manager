@@ -131,9 +131,13 @@ class OBClient(object):
     def list_vim_instances(self):
         return self.agent.get_vim_instance_agent(self.project_id).find()
 
-    def list_images(self):
-        res = []
-        for vim_instance in json.loads(self.agent.get_vim_instance_agent(self.project_id).find()):
+    def list_images_network_flavors(self):
+        images = []
+        networks = []
+        flavors = []
+        vim_instance_agent = self.agent.get_vim_instance_agent(self.project_id)
+
+        for vim_instance in json.loads(vim_instance_agent.find()):
 
             vim_instance_name = vim_instance.get("name")
             if "-" in vim_instance_name:
@@ -141,13 +145,27 @@ class OBClient(object):
             else:
                 testbed_name = vim_instance_name
             for img in vim_instance.get("images"):
-                res.append(
+                images.append(
                     {
                         "testbed": testbed_name,
                         "name": img.get("name")
                     }
                 )
-        return res
+            for net in vim_instance.get("networks"):
+                networks.append(
+                    {
+                        "testbed": testbed_name,
+                        "name": net.get("name")
+                    }
+                )
+            for flavor in vim_instance.get("flavours"):
+                flavors.append(
+                    {
+                        "testbed": testbed_name,
+                        "name": flavor.get("flavour_key")
+                    }
+                )
+        return images, networks, flavors
 
     def upload_package(self, package_path, name=None):
         package_agent = self.agent.get_vnf_package_agent(self.project_id)
@@ -273,13 +291,31 @@ class NfvManager(AbstractManager):
             """
         result = []
         ob_client = OBClient(user_info.name)
-        for image in ob_client.list_images():
+        images, networks, flavours = ob_client.list_images_network_flavors()
+
+        for image in images:
             testbed = image.get('testbed')
             resource_id = image.get('name')
             result.append(messages_pb2.ResourceMetadata(resource_id=resource_id,
                                                         description='',
                                                         cardinality=-1,
                                                         node_type='NfvImage',
+                                                        testbed=TESTBED_MAPPING.get(testbed)))
+        for net in networks:
+            testbed = net.get('testbed')
+            resource_id = net.get('name')
+            result.append(messages_pb2.ResourceMetadata(resource_id=resource_id,
+                                                        description='',
+                                                        cardinality=-1,
+                                                        node_type='NfvNetwork',
+                                                        testbed=TESTBED_MAPPING.get(testbed)))
+        for flavour in flavours:
+            testbed = flavour.get('testbed')
+            resource_id = flavour.get('name')
+            result.append(messages_pb2.ResourceMetadata(resource_id=resource_id,
+                                                        description='',
+                                                        cardinality=-1,
+                                                        node_type='NfvFlavor',
                                                         testbed=TESTBED_MAPPING.get(testbed)))
         return result
 
