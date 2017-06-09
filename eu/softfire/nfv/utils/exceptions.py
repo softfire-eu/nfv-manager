@@ -14,3 +14,11 @@ class NfvResourceValidationError(BaseException):
 
 class NfvResourceDeleteException(BaseException):
     pass
+
+
+class NfvResourceProvisioningException(BaseException):
+    pass
+
+
+class MissingFileException(NfvResourceProvisioningException):
+    pass
