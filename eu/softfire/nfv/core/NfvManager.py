@@ -398,7 +398,8 @@ class NfvManager(AbstractManager):
 
         else:
             # TODO implement specific deployment
-            csar_nsd_file_path = "/etc/softfire/experiment-nsd-csar/%s" % file_name[6:]
+            csar_nsd_file_path = "%s/%s" % (
+            get_config('system', 'temp-csar-location', '/etc/softfire/experiment-nsd-csar'), file_name[6:])
             if os.path.exists(csar_nsd_file_path):
                 nsd = ob_client.create_nsd_from_csar(csar_nsd_file_path)
                 logger.debug("Created NSD: %s" % nsd)
@@ -409,7 +410,8 @@ class NfvManager(AbstractManager):
             if "ANY" in testbeds.keys():
                 for vnfd in nsd.get('vnfd'):
                     for vdu in vnfd.get('vdu'):
-                        vdu_vim_instances[vdu.get('name')] = ["vim-instance-%s" % vim_name for vim_name in testbeds.values()]
+                        vdu_vim_instances[vdu.get('name')] = ["vim-instance-%s" % vim_name for vim_name in
+                                                              testbeds.values()]
             else:
                 for vdu_name in nsd_chosen.get("vnf_types"):
                     vdu_vim_instances[vdu_name] = [testbeds.get(vdu_name)]
