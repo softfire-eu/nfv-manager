@@ -18,7 +18,8 @@ from sqlalchemy.orm.exc import NoResultFound
 
 from eu.softfire.nfv.db.entities import Nsr
 from eu.softfire.nfv.db.repositories import find, delete, save
-from eu.softfire.nfv.utils.exceptions import NfvResourceValidationError, NfvResourceDeleteException
+from eu.softfire.nfv.utils.exceptions import NfvResourceValidationError, NfvResourceDeleteException, \
+    MissingFileException
 from eu.softfire.nfv.utils.os_utils import create_os_project
 from eu.softfire.nfv.utils.static_config import CONFIG_FILE_PATH
 from eu.softfire.nfv.utils.utils import get_available_nsds, get_logger, get_config
@@ -397,11 +398,12 @@ class NfvManager(AbstractManager):
 
         else:
             # TODO implement specific deployment
-            csar_nsd_file_name = file_name[6:]
-            csar_nsd_file_path = "/etc/softfire/experiment-nsd-csar/%s" % csar_nsd_file_name
+            csar_nsd_file_path = "/etc/softfire/experiment-nsd-csar/%s" % file_name[6:]
             if os.path.exists(csar_nsd_file_path):
                 nsd = ob_client.create_nsd_from_csar(csar_nsd_file_path)
                 logger.debug("Created NSD: %s" % nsd)
+            else:
+                raise MissingFileException("File %s was not found" % csar_nsd_file_path)
             vdu_vim_instances = {}
 
             if "ANY" in testbeds.keys():
