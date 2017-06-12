@@ -18,7 +18,8 @@ from sqlalchemy.orm.exc import NoResultFound
 
 from eu.softfire.nfv.db.entities import Nsr
 from eu.softfire.nfv.db.repositories import find, delete, save
-from eu.softfire.nfv.utils.exceptions import NfvResourceValidationError, NfvResourceDeleteException
+from eu.softfire.nfv.utils.exceptions import NfvResourceValidationError, NfvResourceDeleteException, \
+    MissingFileException
 from eu.softfire.nfv.utils.os_utils import create_os_project
 from eu.softfire.nfv.utils.static_config import CONFIG_FILE_PATH
 from eu.softfire.nfv.utils.utils import get_available_nsds, get_logger, get_config
@@ -217,6 +218,9 @@ class OBClient(object):
             )
         )
 
+    def create_nsd_from_csar(self, location):
+        return self.agent.get_csarnsd_agent(self.project_id).create(location)
+
 
 def get_nsrs_to_check():
     return find(Nsr)
@@ -322,6 +326,7 @@ class NfvManager(AbstractManager):
             {
                 'properties': {
                     'nsd_name': 'my_nsd',
+                    'file_name': 'Files/my_nsd.csar',
                     'resource_id': 'open5gcore',
                     'testbeds': {
                         'ANY':
@@ -344,6 +349,7 @@ class NfvManager(AbstractManager):
         logger.debug("Received %s " % resource_dict)
         ssh_pub_key = resource_dict.get("properties").get('ssh_pub_key')
         resource_id = resource_dict.get("properties").get("resource_id")
+        file_name = resource_dict.get("properties").get("file_name")
         nsd_name = resource_dict.get("properties").get("resource_id")
         if ssh_pub_key:
             ob_client.import_key(ssh_pub_key, nsd_name)
@@ -388,13 +394,33 @@ class NfvManager(AbstractManager):
                 "keys": [nsd_name]
             })
             nsr = ob_client.create_nsr(nsd.get('id'), body=body)
-
             add_nsr_to_check(user_info.name, nsr)
 
         else:
             # TODO implement specific deployment
-            nsr = {}
-            # nsr = ob_client.create_nsr(payload.get("nsd-id"))
+            csar_nsd_file_path = "%s/%s" % (
+            get_config('system', 'temp-csar-location', '/etc/softfire/experiment-nsd-csar'), file_name[6:])
+            if os.path.exists(csar_nsd_file_path):
+                nsd = ob_client.create_nsd_from_csar(csar_nsd_file_path)
+                logger.debug("Created NSD: %s" % nsd)
+            else:
+                raise MissingFileException("File %s was not found" % csar_nsd_file_path)
+            vdu_vim_instances = {}
+
+            if "ANY" in testbeds.keys():
+                for vnfd in nsd.get('vnfd'):
+                    for vdu in vnfd.get('vdu'):
+                        vdu_vim_instances[vdu.get('name')] = ["vim-instance-%s" % vim_name for vim_name in
+                                                              testbeds.values()]
+            else:
+                for vdu_name in nsd_chosen.get("vnf_types"):
+                    vdu_vim_instances[vdu_name] = [testbeds.get(vdu_name)]
+            body = json.dumps({
+                "vduVimInstances": vdu_vim_instances
+            })
+            if nsd:
+                nsr = ob_client.create_nsr(nsd.get('id'), body)
+                add_nsr_to_check(user_info.name, nsr)
         if isinstance(nsr, dict):
             nsr = json.dumps(nsr)
         return [nsr]
