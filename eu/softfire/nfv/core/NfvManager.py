@@ -267,7 +267,10 @@ class NfvManager(AbstractManager):
         resource_id = request_dict.get("properties").get('resource_id')
         available_nsds = get_available_nsds()
         if resource_id not in available_nsds.keys():
-            if not request_dict.get("properties").get('file_name'):
+            temp_csar_location = self.get_config_value('system', 'temp-csar-location',
+                                                       '/etc/softfire/experiment-nsd-csar').rstrip('/')
+            nsd_location = '{}/{}/{}.csar'.format(temp_csar_location, user_info.name, resource_id)
+            if not (os.path.exists(nsd_location) or request_dict.get("properties").get('file_name')):
                 raise NfvResourceValidationError(
                     message="Resource id %s not in the available ones %s and no CSAR file provided" % (
                         resource_id, list(available_nsds.keys())))
@@ -353,15 +356,16 @@ class NfvManager(AbstractManager):
         nsd_name = resource_dict.get("properties").get("resource_id")
         if ssh_pub_key:
             ob_client.import_key(ssh_pub_key, nsd_name)
-        packages_location = "%s/%s" % (self.get_config_value("system", "packages-location"), resource_id)
+        temp_csar_location = "{}/{}".format(self.get_config_value("system", "temp-csar-location").rstrip('/'),
+                                            resource_id)
         available_nsds = get_available_nsds()
         nsd_chosen = available_nsds.get(resource_id)
         vnfds = []
         testbeds = resource_dict.get("properties").get("testbeds")
 
-        if os.path.exists(packages_location) and nsd_chosen:
-            for package in [f for f in listdir(packages_location) if isfile(join(packages_location, f))]:
-                vnfd = ob_client.upload_package(join(packages_location, package), package.split('.')[0])
+        if os.path.exists(temp_csar_location) and nsd_chosen:
+            for package in [f for f in listdir(temp_csar_location) if isfile(join(temp_csar_location, f))]:
+                vnfd = ob_client.upload_package(join(temp_csar_location, package), package.split('.')[0])
                 vnfds.append({
                     'id': vnfd.get('id')
                 })
@@ -397,9 +401,10 @@ class NfvManager(AbstractManager):
             add_nsr_to_check(user_info.name, nsr)
 
         else:
-            # TODO implement specific deployment
-            csar_nsd_file_path = "%s/%s" % (
-            get_config('system', 'temp-csar-location', '/etc/softfire/experiment-nsd-csar'), file_name[6:])
+            # nsd resource was added by the user and is not available for everyone
+            temp_csar_location = self.get_config_value("system", "temp-csar-location")
+            csar_nsd_file_path = "{}/{}/{}".format(
+                temp_csar_location.rstrip('/'), user_info.name, file_name[6:])
             if os.path.exists(csar_nsd_file_path):
                 nsd = ob_client.create_nsd_from_csar(csar_nsd_file_path)
                 logger.debug("Created NSD: %s" % nsd)
