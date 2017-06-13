@@ -34,11 +34,9 @@ def start():
     """)
     try:
         start_manager(nfv_manager)
-        thread.join()
     finally:
         thread.stop()
         thread.join()
-        exit(0)
 
 if __name__ == '__main__':
     start()
