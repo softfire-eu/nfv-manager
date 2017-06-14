@@ -237,6 +237,7 @@ def add_nsr_to_check(username, nsr):
     nsr_to_save = Nsr()
     nsr_to_save.username = username
     nsr_to_save.id = nsr.get('id')
+    nsr_to_save.status = nsr.get('status')
     nsr_to_save.vnf_log_url = {}
 
     for vnfr in nsr.get('vnfr'):
@@ -245,7 +246,7 @@ def add_nsr_to_check(username, nsr):
                 if not nsr_to_save.vnf_log_url.get(vnfr.get('name')):
                     nsr_to_save.vnf_log_url[vnfr.get('name')] = ""
                 nsr_to_save.vnf_log_url[vnfr.get('name')] += "%s;" % vnfc_instance.get('hostname')
-    save(nsr_to_save)
+    save(nsr_to_save, Nsr)
 
 
 def remove_nsr_to_check(nsr_id):
@@ -356,7 +357,7 @@ class NfvManager(AbstractManager):
         nsd_name = resource_dict.get("properties").get("resource_id")
         if ssh_pub_key:
             ob_client.import_key(ssh_pub_key, nsd_name)
-        temp_csar_location = "{}/{}".format(self.get_config_value("system", "temp-csar-location").rstrip('/'),
+        temp_csar_location = "{}/{}".format(self.get_config_value("system", "temp-csar-location",'/etc/softfire/experiment-nsd-csar').rstrip('/'),
                                             resource_id)
         available_nsds = get_available_nsds()
         nsd_chosen = available_nsds.get(resource_id)
@@ -402,7 +403,7 @@ class NfvManager(AbstractManager):
 
         else:
             # nsd resource was added by the user and is not available for everyone
-            temp_csar_location = self.get_config_value("system", "temp-csar-location")
+            temp_csar_location = self.get_config_value("system", "temp-csar-location", "/etc/softfire/experiment-nsd-csar")
             csar_nsd_file_path = "{}/{}/{}".format(
                 temp_csar_location.rstrip('/'), user_info.name, file_name[6:])
             if os.path.exists(csar_nsd_file_path):
@@ -428,6 +429,8 @@ class NfvManager(AbstractManager):
                 add_nsr_to_check(user_info.name, nsr)
         if isinstance(nsr, dict):
             nsr = json.dumps(nsr)
+
+        logger.info("Deployed resource: %s" % nsr.get('name'))
         return [nsr]
 
     def create_user(self, user_info):
@@ -592,14 +595,15 @@ class NfvManager(AbstractManager):
                 for nsr in nsrs:
                     if not result.get(nsr.username):
                         result[nsr.username] = []
-                    nsr_new = self._update_nsr(nsr)
-                    result[nsr.username].append(nsr_new)
+                    if nsr.status.lower() not in ['active', 'error']:
+                        nsr_new = self._update_nsr(nsr)
+                        result[nsr.username].append(nsr_new)
             else:
-                logger.debug("pickle is %s" % nsrs.vnf_log_url)
                 if not result.get(nsrs.username):
                     result[nsrs.username] = []
-                nsr_new = self._update_nsr(nsrs)
-                result[nsrs.username].append(nsr_new)
+                if nsrs.status.lower() not in ['active', 'error']:
+                    nsr_new = self._update_nsr(nsrs)
+                    result[nsrs.username].append(nsr_new)
 
         return result
 
