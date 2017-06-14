@@ -10,5 +10,6 @@ class Nsr(Base):
 
     id = Column(String(250), primary_key=True)
     username = Column(String(250), nullable=False)
+    status = Column(String(250), nullable=False)
     # {vnfrName:hostname}
     vnf_log_url = Column(PickleType)
