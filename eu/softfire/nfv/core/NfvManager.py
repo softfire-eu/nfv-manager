@@ -430,7 +430,7 @@ class NfvManager(AbstractManager):
         if isinstance(nsr, dict):
             nsr = json.dumps(nsr)
 
-        logger.info("Deployed resource: %s" % nsr.get('name'))
+        logger.info("Deployed resource: %s" % json.loads(nsr).get('name'))
         return [nsr]
 
     def create_user(self, user_info):
