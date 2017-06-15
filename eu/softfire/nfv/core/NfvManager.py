@@ -357,8 +357,9 @@ class NfvManager(AbstractManager):
         nsd_name = resource_dict.get("properties").get("resource_id")
         if ssh_pub_key:
             ob_client.import_key(ssh_pub_key, nsd_name)
-        temp_csar_location = "{}/{}".format(self.get_config_value("system", "temp-csar-location",'/etc/softfire/experiment-nsd-csar').rstrip('/'),
-                                            resource_id)
+        temp_csar_location = "{}/{}".format(
+            self.get_config_value("system", "temp-csar-location", '/etc/softfire/experiment-nsd-csar').rstrip('/'),
+            resource_id)
         available_nsds = get_available_nsds()
         nsd_chosen = available_nsds.get(resource_id)
         vnfds = []
@@ -403,7 +404,8 @@ class NfvManager(AbstractManager):
 
         else:
             # nsd resource was added by the user and is not available for everyone
-            temp_csar_location = self.get_config_value("system", "temp-csar-location", "/etc/softfire/experiment-nsd-csar")
+            temp_csar_location = self.get_config_value("system", "temp-csar-location",
+                                                       "/etc/softfire/experiment-nsd-csar")
             csar_nsd_file_path = "{}/{}/{}".format(
                 temp_csar_location.rstrip('/'), user_info.name, file_name[6:])
             if os.path.exists(csar_nsd_file_path):
@@ -558,6 +560,7 @@ class NfvManager(AbstractManager):
             logger.error("...ignoring...")
 
         remove_nsr_to_check(nsr.get('id'))
+        logger.info("Removed resource %s" % nsr.get('name'))
 
     def try_delete_nsr(self, nsr, ob_client):
         try:
