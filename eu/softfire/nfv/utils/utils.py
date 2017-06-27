@@ -9,7 +9,7 @@ from eu.softfire.nfv.utils.static_config import CONFIG_FILE_PATH
 
 
 def get_logger(name):
-    logging.config.fileConfig(CONFIG_FILE_PATH)
+    logging.config.fileConfig(CONFIG_FILE_PATH, disable_existing_loggers=False)
     if name.startswith("eu.softfire.nfv"):
         return logging.getLogger(name)
     return logging.getLogger("eu.softfire.nfv.%s" % name)
