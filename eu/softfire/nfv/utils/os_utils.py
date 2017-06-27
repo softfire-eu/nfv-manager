@@ -5,7 +5,7 @@ import neutronclient
 from glanceclient import Client as Glance
 from keystoneauth1 import session
 from keystoneauth1.identity import v2
-from keystoneclient.v2_0 import client as ks_client
+from keystoneclient import client as ks_client, v3
 from neutronclient.common.exceptions import IpAddressGenerationFailureClient
 from neutronclient.v2_0.client import Client as Neutron
 from novaclient.client import Client as Nova
@@ -19,9 +19,10 @@ NETWORKS = ["mgmt", "net_a", "net_b", "net_c", "net_d", "private", "softfire-int
 
 
 class OSClient(object):
-    def __init__(self, testbed_name, testbed, tenant_name=None):
+    def __init__(self, testbed_name, testbed, tenant_name=None, api_version=2):
         self.testbed_name = testbed_name
         self.testbed = testbed
+        self.api_version = api_version
         self.username = self.testbed.get('username')
         self.password = self.testbed.get('password')
         self.auth_url = self.testbed.get("auth_url")
@@ -37,18 +38,22 @@ class OSClient(object):
             logging.basicConfig(level=logging.DEBUG)
         if not tenant_name:
             logger.debug("Creating keystone client")
-            self.keystone = ks_client.Client(auth_url=self.auth_url,
-                                             username=self.username,
-                                             password=self.password,
-                                             tenant_name=self.admin_tenant_name)
+            auth = v2.Password(auth_url=self.auth_url,
+                               username=self.username,
+                               password=self.password,
+                               tenant_name=self.admin_tenant_name)
+            sess = session.Session(auth=auth)
+            self.keystone = ks_client.Client(session=sess)
             logger.debug("Created Keystone client %s" % self.keystone)
         else:
             self.tenant_name = tenant_name
             logger.debug("Creating keystone client")
-            self.keystone = ks_client.Client(auth_url=self.auth_url,
-                                             username=self.username,
-                                             password=self.password,
-                                             tenant_name=tenant_name)
+            # auth = v2.Password(auth_url=self.auth_url,
+            #                    username=self.username,
+            #                    password=self.password,
+            #                    tenant_name=tenant_name)
+            # sess = session.Session(auth=auth)
+            self.keystone = ks_client.Client(session=self._get_session())
             logger.debug("Created Keystone client %s" % self.keystone)
             self.os_tenant_id = self._get_tenant_id_from_name(self.tenant_name)
             self.set_nova(self.os_tenant_id)
@@ -57,8 +62,22 @@ class OSClient(object):
 
     def set_nova(self, os_tenant_id):
         self.os_tenant_id = os_tenant_id
-        if not self.nova:
-            self.nova = Nova('2', self.username, self.password, self.os_tenant_id, self.auth_url)
+        se = self._get_session()
+        self.nova = Nova('2.1', session=se)
+
+    def _get_session(self):
+        if self.api_version == 2:
+            auth = v2.Password(auth_url=self.auth_url,
+                               username=self.username,
+                               password=self.password,
+                               tenant_id=self.os_tenant_id)
+        elif self.api_version == 3:
+            auth = v3.Password(auth_url=self.auth_url,
+                               username=self.username,
+                               password=self.password,
+                               project_id=self.os_tenant_id)
+        se = session.Session(auth=auth)
+        return se
 
     def set_neutron(self, os_tenant_id):
         self.os_tenant_id = os_tenant_id
@@ -285,6 +304,9 @@ class OSClient(object):
                 return t.name
 
     def create_user(self, username, password, tenant_id=None):
+        for u in self.keystone.users.list():
+            if u.username == username:
+                return u
         return self.keystone.users.create(username, password, tenant_id=tenant_id)
 
 
@@ -341,7 +363,7 @@ def create_os_project(username, password, tenant_name, testbed_name=None):
 
 
 def _create_single_project(tenant_name, testbed, testbed_name, username, password):
-    os_client = OSClient(testbed_name, testbed)
+    os_client = OSClient(testbed_name, testbed, api_version=testbed.get('api_version'))
     logger.info("Created OSClient")
     os_tenant_id = None
     user = os_client.get_user()
