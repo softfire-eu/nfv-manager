@@ -56,16 +56,17 @@ class OSClient(object):
             self.keystone = self._create_keystone_client()
             logger.debug("Created Keystone client %s" % self.keystone)
         else:
-            self.project_id = project_id
+            self.os_tenant_id = self.project_id = self._get_tenant_id_from_name(tenant_name)
             self.tenant_name = tenant_name
+
             if self.api_version == 2 and not self.tenant_name:
                 raise OpenstackClientError("Missing tenant name required if using v2")
             if self.api_version == 3 and not self.project_id:
                 raise OpenstackClientError("Missing project id required if using v3")
+
             logger.debug("Creating keystone client")
             self.keystone = ks_client.Client(session=self._get_session())
             logger.debug("Created Keystone client %s" % self.keystone)
-            self.os_tenant_id = self._get_tenant_id_from_name(self.tenant_name)
             self.set_nova(self.os_tenant_id)
             self.set_neutron(self.os_tenant_id)
             self.set_glance(self.os_tenant_id)
@@ -144,7 +145,7 @@ class OSClient(object):
             self.set_nova(os_tenant_id=os_tenant_id)
         keypair_name = "softfire-key"
         self.keypair = keypair_name
-        for keypair in self.nova.keypairs.list():
+        for keypair in self.list_keypairs(os_tenant_id):
             if keypair.name == keypair_name:
                 return keypair
         kargs = {"name": keypair_name,
@@ -270,14 +271,20 @@ class OSClient(object):
             pwd = password
         else:
             pwd = self.password
-        if tenant_name:
-            self.tenant_name = tenant_name
-        tenant_id_from_name = self._get_tenant_id_from_name(tenant_name)
+
+        if self.project_id:
+            tenant_id_from_name = self.project_id
+        else:
+            tenant_id_from_name = self._get_tenant_id_from_name(tenant_name)
+
         if not self.keypair:
+            logger.debug("Using project id: %s" % tenant_id_from_name)
             self.keypair = self.import_keypair(os_tenant_id=tenant_id_from_name).name
+
         if not self.sec_group:
             self.set_neutron(tenant_id_from_name)
             self.sec_group = self.create_security_group()
+
         return {
             "name": "vim-instance-%s" % self.testbed_name,
             "authUrl": self.auth_url,
@@ -354,7 +361,6 @@ class OSClient(object):
 def _list_images_single_tenant(tenant_name, testbed, testbed_name):
     os_client = OSClient(testbed_name, testbed, tenant_name)
     result = []
-    # TODO filter images per experimenter
     for image in os_client.list_images():
         logger.debug("%s" % image.name)
         result.append({
@@ -406,11 +412,16 @@ def create_os_project(username, password, tenant_name, testbed_name=None):
 def _create_single_project(tenant_name, testbed, testbed_name, username, password):
     os_client = OSClient(testbed_name, testbed)
     logger.info("Created OSClient")
-    os_tenant_id = None
-    user = os_client.get_user()
-    logger.debug("Got User %s" % user)
-    role = os_client.get_role('admin')
-    logger.debug("Got Role %s" % role)
+    admin_user = os_client.get_user()
+    exp_user = os_client.create_user(username, password)
+    logger.debug("Got User %s" % admin_user)
+    admin_role = os_client.get_role('admin')
+    try:
+        user_role = os_client.get_role('_member_')
+    except:
+        user_role = os_client.get_role('member')
+
+    logger.debug("Got Role %s" % admin_role)
     for tenant in os_client.list_tenants():
         if tenant.name == tenant_name:
             logger.warn("Tenant with name or id %s exists already! I assume a double registration i will not do "
@@ -420,19 +431,19 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
             exp_user = os_client.get_user(username)
             if not exp_user:
                 exp_user = os_client.create_user(username, password)
-                role = os_client.get_role('_member_')
-                os_client.add_user_role(user=exp_user, role=role, tenant=tenant.id)
-            return tenant.id, os_client.get_vim_instance(tenant_name, username, password)
-    if os_tenant_id is None:
-        tenant = os_client.create_tenant(tenant_name=tenant_name,
-                                         description='openbaton tenant for user %s' % tenant_name)
-        logger.debug("Created tenant %s" % tenant)
-        os_tenant_id = tenant.id
-        logger.info("Created tenant with id: %s" % os_tenant_id)
 
-    user = os_client.create_user(username, password)
-    role = os_client.get_role('_member_')
-    os_client.add_user_role(user=user, role=role, tenant=os_tenant_id)
+                os_client.add_user_role(user=exp_user, role=user_role, tenant=tenant.id)
+                os_client.add_user_role(user=admin_user, role=admin_role, tenant=tenant.id)
+            return tenant.id, os_client.get_vim_instance(tenant_name, username, password)
+
+    tenant = os_client.create_tenant(tenant_name=tenant_name, description='softfire tenant for user %s' % tenant_name)
+    logger.debug("Created tenant %s" % tenant)
+    os_tenant_id = tenant.id
+    logger.info("Created tenant with id: %s" % os_tenant_id)
+
+    os_client.add_user_role(user=admin_user, role=admin_role, tenant=os_tenant_id)
+    os_client.add_user_role(user=exp_user, role=user_role, tenant=os_tenant_id)
+
     os_client = OSClient(testbed_name, testbed, tenant_name)
 
     keypair = os_client.import_keypair(os_tenant_id=os_tenant_id)
