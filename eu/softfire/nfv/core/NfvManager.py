@@ -474,13 +474,13 @@ class NfvManager(AbstractManager):
         # user_info.testbed_tenants = {}
 
         testbed_tenants = {}
-
-        for testbed_name, v in os_tenants.items():
-            tenant_id = v.get('tenant_id')
-            vim_instance = v.get('vim_instance')
-            vi = ob_client.create_vim_instance(vim_instance)
-            logger.debug("created vim instance with id: %s" % vi.get('id'))
-            testbed_tenants[TESTBED_MAPPING[testbed_name]] = tenant_id
+        if os_tenants:
+            for testbed_name, v in os_tenants.items():
+                tenant_id = v.get('tenant_id')
+                vim_instance = v.get('vim_instance')
+                vi = ob_client.create_vim_instance(vim_instance)
+                logger.debug("created vim instance with id: %s" % vi.get('id'))
+                testbed_tenants[TESTBED_MAPPING[testbed_name]] = tenant_id
 
         for k, v in testbed_tenants.items():
             user_info.testbed_tenants[k] = v
