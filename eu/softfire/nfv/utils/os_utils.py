@@ -461,7 +461,7 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
     os_client.add_user_role(user=admin_user, role=admin_role, tenant=os_tenant_id)
     os_client.add_user_role(user=exp_user, role=user_role, tenant=os_tenant_id)
 
-    os_client = OSClient(testbed_name, testbed, tenant_name)
+    os_client = OSClient(testbed_name, testbed, project_id=os_tenant_id)
 
     keypair = os_client.import_keypair(os_tenant_id=os_tenant_id)
     logger.debug("imported keypair %s " % keypair)
