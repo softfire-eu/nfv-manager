@@ -284,9 +284,11 @@ class OSClient(object):
             pwd = self.password
 
         if self.project_id:
+            tenant = self.project_id
             tenant_id_from_name = self.project_id
         else:
             tenant_id_from_name = self._get_tenant_id_from_name(tenant_name)
+            tenant = tenant_name
 
         if not self.keypair:
             logger.debug("Using project id: %s" % tenant_id_from_name)
@@ -299,7 +301,7 @@ class OSClient(object):
         return {
             "name": "vim-instance-%s" % self.testbed_name,
             "authUrl": self.auth_url,
-            "tenant": self.tenant_name,
+            "tenant": tenant,
             "username": un,
             "password": pwd,
             "keyPair": self.keypair,

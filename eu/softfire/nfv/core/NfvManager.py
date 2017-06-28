@@ -121,6 +121,8 @@ class OBClient(object):
                 return vi
         if isinstance(vim_instance, dict):
             vim_instance = json.dumps(vim_instance)
+
+        logger.debug("Posting vim %s" % vim_instance)
         return self.agent.get_vim_instance_agent(self.project_id).create(vim_instance)
 
     def list_users(self):
