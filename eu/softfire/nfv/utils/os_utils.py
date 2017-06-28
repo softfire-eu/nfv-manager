@@ -82,7 +82,8 @@ class OSClient(object):
         if self.api_version == 3:
             return keystoneclient.v3.client.Client(session=self._get_session())
         elif self.api_version == 2:
-            return keystoneclient.v2_0.client.Client(session=self._get_session())
+            return keystoneclient.v2_0.client.Client(username=self.username, password=self.password,
+                                                     tenant_name=self.tenant_name, auth_url=self.auth_url)
 
     def set_nova(self, os_tenant_id):
         self.nova = Nova('2.1', session=self._get_session(os_tenant_id))
@@ -351,7 +352,7 @@ class OSClient(object):
                 return t.name
 
     def create_user(self, username, password, tenant_id=None):
-        for u in self.keystone.users.list():
+        for u in self.list_users():
             if hasattr(u, 'username'):
                 u_username = u.username
             else:
@@ -510,11 +511,13 @@ def get_username_hash(username):
 
 
 if __name__ == '__main__':
-    client = OSClient('fokus', get_openstack_credentials().get('fokus'))
-    project_id = get_openstack_credentials().get('fokus').get("admin_project_id")
+    testbed_name = 'ericsson'
+    credentials = get_openstack_credentials().get(testbed_name)
+    client = OSClient(testbed_name, credentials)
+    project_id = credentials.get("admin_project_id")
     # print(client.list_images(project_id))
-    print(client.list_tenants())
-    # print(client.list_users())
+    # print(client.list_tenants())
+    print(client.list_users())
     # print(client.list_networks(project_id))
     # print(client.list_keypairs(project_id))
     # print(client.list_domains())
