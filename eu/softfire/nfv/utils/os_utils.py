@@ -441,7 +441,7 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
     os_client = OSClient(testbed_name, testbed)
     logger.info("Created OSClient")
     admin_user = os_client.get_user()
-    exp_user = os_client.create_user(username, password)
+
     logger.debug("Got User %s" % admin_user)
     admin_role = os_client.get_role('admin')
     try:
@@ -459,7 +459,6 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
             exp_user = os_client.get_user(username)
             if not exp_user:
                 exp_user = os_client.create_user(username, password)
-
                 os_client.add_user_role(user=exp_user, role=user_role, tenant=tenant.id)
                 os_client.add_user_role(user=admin_user, role=admin_role, tenant=tenant.id)
             return tenant.id, os_client.get_vim_instance(tenant_name, username, password)
@@ -469,6 +468,7 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
     os_tenant_id = tenant.id
     logger.info("Created tenant with id: %s" % os_tenant_id)
 
+    exp_user = os_client.create_user(username, password, os_tenant_id)
     os_client.add_user_role(user=admin_user, role=admin_role, tenant=os_tenant_id)
     os_client.add_user_role(user=exp_user, role=user_role, tenant=os_tenant_id)
 
@@ -508,10 +508,10 @@ if __name__ == '__main__':
     client = OSClient('fokus', get_openstack_credentials().get('fokus'))
     project_id = get_openstack_credentials().get('fokus').get("admin_project_id")
     # print(client.list_images(project_id))
-    # print(client.list_tenants())
+    print(client.list_tenants())
     # print(client.list_users())
     # print(client.list_networks(project_id))
     # print(client.list_keypairs(project_id))
     # print(client.list_domains())
-    for i in dir(client.keystone.role_assignments.create):
-        print(i)
+    # for i in dir(client.keystone.role_assignments.create):
+    #     print(i)
