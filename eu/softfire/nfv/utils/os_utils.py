@@ -288,7 +288,7 @@ class OSClient(object):
         else:
             tenant_id_from_name = self._get_tenant_id_from_name(tenant_name)
 
-        if self.api_version == 2:
+        if self.api_version == 3:
             tenant = tenant_id_from_name
         else:
             tenant = tenant_name
