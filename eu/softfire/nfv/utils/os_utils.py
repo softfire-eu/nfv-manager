@@ -336,7 +336,11 @@ class OSClient(object):
 
     def create_user(self, username, password, tenant_id=None):
         for u in self.keystone.users.list():
-            if u.username == username:
+            if hasattr(u, 'username'):
+                u_username = u.username
+            else:
+                u_username = u.name
+            if u_username == username:
                 return u
         return self.keystone.users.create(username, password, tenant_id=tenant_id)
 
@@ -482,5 +486,8 @@ if __name__ == '__main__':
     print(client.list_images(project_id))
     print(client.list_tenants())
     print(client.list_users())
+
+    for u in client.list_users():
+        print(dir(u))
     print(client.list_networks(project_id))
     print(client.list_keypairs(project_id))
