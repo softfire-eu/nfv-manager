@@ -1,11 +1,12 @@
 import logging
 import traceback
 
+import keystoneclient
 import neutronclient
 from glanceclient import Client as Glance
 from keystoneauth1 import session
-from keystoneauth1.identity import v2
-from keystoneclient import client as ks_client, v3
+from keystoneauth1.identity import v2, v3
+from keystoneclient import client as ks_client
 from neutronclient.common.exceptions import IpAddressGenerationFailureClient
 from neutronclient.v2_0.client import Client as Neutron
 from novaclient.client import Client as Nova
@@ -19,40 +20,49 @@ NETWORKS = ["mgmt", "net_a", "net_b", "net_c", "net_d", "private", "softfire-int
 
 
 class OSClient(object):
-    def __init__(self, testbed_name, testbed, tenant_name=None, api_version=2):
+    def __init__(self, testbed_name, testbed, tenant_name=None, project_id=None):
         self.testbed_name = testbed_name
+        self.tenant_name = None
+        self.project_id = None
         self.testbed = testbed
-        self.api_version = api_version
+        self.project_domain_name = self.testbed.get('project_domain_name') or 'Default'
+        self.user_domain_name = self.testbed.get('user_domain_name') or 'Default'
+        self.api_version = self.testbed.get('api_version')
         self.username = self.testbed.get('username')
         self.password = self.testbed.get('password')
         self.auth_url = self.testbed.get("auth_url")
         self.admin_tenant_name = self.testbed.get("admin_tenant_name")
+        self.admin_project_id = self.testbed.get("admin_project_id")
+        if not self.admin_tenant_name and not self.admin_project_id:
+            raise OpenstackClientError("Missing both adimn project id and admin tenant name")
+        if self.api_version == 2 and not self.admin_tenant_name:
+            raise OpenstackClientError("Missing tenant name required if using v2")
+        if self.api_version == 3 and not self.admin_project_id:
+            raise OpenstackClientError("Missing project id required if using v3")
+
         self.neutron = None
         self.nova = None
         self.glance = None
         self.keypair = None
         self.sec_group = None
         self.os_tenant_id = None
+
         logger.debug("Log level is: %s and DEBUG is %s" % (logger.getEffectiveLevel(), logging.DEBUG))
         if logger.getEffectiveLevel() == logging.DEBUG:
             logging.basicConfig(level=logging.DEBUG)
-        if not tenant_name:
-            logger.debug("Creating keystone client")
-            auth = v2.Password(auth_url=self.auth_url,
-                               username=self.username,
-                               password=self.password,
-                               tenant_name=self.admin_tenant_name)
-            sess = session.Session(auth=auth)
-            self.keystone = ks_client.Client(session=sess)
+
+        if not tenant_name and not project_id:
+
+            self.keystone = self._create_keystone_client()
             logger.debug("Created Keystone client %s" % self.keystone)
         else:
+            self.project_id = project_id
             self.tenant_name = tenant_name
+            if self.api_version == 2 and not self.tenant_name:
+                raise OpenstackClientError("Missing tenant name required if using v2")
+            if self.api_version == 3 and not self.project_id:
+                raise OpenstackClientError("Missing project id required if using v3")
             logger.debug("Creating keystone client")
-            # auth = v2.Password(auth_url=self.auth_url,
-            #                    username=self.username,
-            #                    password=self.password,
-            #                    tenant_name=tenant_name)
-            # sess = session.Session(auth=auth)
             self.keystone = ks_client.Client(session=self._get_session())
             logger.debug("Created Keystone client %s" % self.keystone)
             self.os_tenant_id = self._get_tenant_id_from_name(self.tenant_name)
@@ -60,32 +70,40 @@ class OSClient(object):
             self.set_neutron(self.os_tenant_id)
             self.set_glance(self.os_tenant_id)
 
-    def set_nova(self, os_tenant_id):
-        self.os_tenant_id = os_tenant_id
-        se = self._get_session()
-        self.nova = Nova('2.1', session=se)
+    def _create_keystone_client(self):
+        if self.api_version == 3:
+            return keystoneclient.v3.client.Client(session=self._get_session())
+        elif self.api_version == 2:
+            return keystoneclient.v2_0.client.Client(session=self._get_session())
 
-    def _get_session(self):
+    def set_nova(self, os_tenant_id):
+        self.nova = Nova('2.1', session=self._get_session(os_tenant_id))
+
+    def _get_session(self, tenant_id=None):
         if self.api_version == 2:
+            tenant_name = self.tenant_name or self.admin_tenant_name
             auth = v2.Password(auth_url=self.auth_url,
                                username=self.username,
                                password=self.password,
-                               tenant_id=self.os_tenant_id)
+                               tenant_name=tenant_name)
         elif self.api_version == 3:
+            p_id = tenant_id or self.project_id or self.admin_project_id
             auth = v3.Password(auth_url=self.auth_url,
                                username=self.username,
                                password=self.password,
-                               project_id=self.os_tenant_id)
-        se = session.Session(auth=auth)
-        return se
+                               project_id=p_id,
+                               project_domain_name=self.project_domain_name,
+                               user_domain_name=self.user_domain_name)
+        else:
+            msg = "Wrong api version: %s" % self.api_version
+            logger.error(msg)
+            raise OpenstackClientError(msg)
+        return session.Session(auth=auth)
 
     def set_neutron(self, os_tenant_id):
-        self.os_tenant_id = os_tenant_id
+        # self.os_tenant_id = os_tenant_id
         if not self.neutron:
-            self.neutron = Neutron(username=self.username,
-                                   password=self.password,
-                                   tenant_id=self.os_tenant_id,
-                                   auth_url=self.auth_url)
+            self.neutron = Neutron(session=self._get_session(os_tenant_id))
 
     def get_user(self, username=None):
         users = self.keystone.users.list()
@@ -104,11 +122,17 @@ class OSClient(object):
                 return role
 
     def list_tenants(self):
-        return self.keystone.tenants.list()
+        if self.api_version == 3:
+            return self.keystone.projects.list()
+        else:
+            return self.keystone.tenants.list()
 
     def create_tenant(self, tenant_name, description):
         self.tenant_name = tenant_name
-        return self.keystone.tenants.create(tenant_name=tenant_name, description=description)
+        if self.api_version == 2:
+            return self.keystone.tenants.create(tenant_name=tenant_name, description=description)
+        else:
+            return self.keystone.projects.create(tenant_name=tenant_name, description=description)
 
     def add_user_role(self, user, role, tenant):
         return self.keystone.roles.add_user_role(user=user, role=role, tenant=tenant)
@@ -282,21 +306,21 @@ class OSClient(object):
             imgs = self.nova.images.list()
             return imgs
         except:
+            self.set_glance(tenant_id)
             return self.glance.images.list()
 
     def _get_tenant_id_from_name(self, tenant_name):
-        for tenant in self.keystone.tenants.list():
+        if self.api_version == 2:
+            tenants_list = self.keystone.tenants.list()
+        else:
+            tenants_list = self.keystone.projects.list()
+        for tenant in tenants_list:
             if tenant.name == tenant_name:
                 return tenant.id
 
     def set_glance(self, os_tenant_id):
         self.os_tenant_id = os_tenant_id
-        auth = v2.Password(auth_url=self.auth_url,
-                           username=self.username,
-                           password=self.password,
-                           tenant_name=self.tenant_name)
-        sess = session.Session(auth=auth)
-        self.glance = Glance('1', session=sess)
+        self.glance = Glance('1', session=self._get_session(os_tenant_id))
 
     def _get_tenant_name_from_id(self, os_tenant_id):
         for t in self.list_tenants():
@@ -308,6 +332,23 @@ class OSClient(object):
             if u.username == username:
                 return u
         return self.keystone.users.create(username, password, tenant_id=tenant_id)
+
+    def list_users(self):
+        return self.keystone.users.list()
+
+    def list_networks(self, project_id=None):
+        if not self.neutron:
+            if not project_id:
+                raise OpenstackClientError("Missing project_id!")
+            self.set_neutron(project_id)
+        return self.neutron.list_networks()
+
+    def list_keypairs(self, os_project_id=None):
+        if not self.nova:
+            if not os_project_id:
+                raise OpenstackClientError("Missing project_id!")
+            self.set_nova(os_project_id)
+        return self.nova.keypairs.list()
 
 
 def _list_images_single_tenant(tenant_name, testbed, testbed_name):
@@ -363,7 +404,7 @@ def create_os_project(username, password, tenant_name, testbed_name=None):
 
 
 def _create_single_project(tenant_name, testbed, testbed_name, username, password):
-    os_client = OSClient(testbed_name, testbed, api_version=testbed.get('api_version'))
+    os_client = OSClient(testbed_name, testbed)
     logger.info("Created OSClient")
     os_tenant_id = None
     user = os_client.get_user()
@@ -425,5 +466,10 @@ def get_username_hash(username):
 
 
 if __name__ == '__main__':
-    res = list_images('5gcore', 'fokus')
-    print(res)
+    client = OSClient('fokus', get_openstack_credentials().get('fokus'))
+    project_id = get_openstack_credentials().get('fokus').get("admin_project_id")
+    print(client.list_images(project_id))
+    print(client.list_tenants())
+    print(client.list_users())
+    print(client.list_networks(project_id))
+    print(client.list_keypairs(project_id))
