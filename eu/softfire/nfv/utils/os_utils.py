@@ -136,7 +136,10 @@ class OSClient(object):
             return self.keystone.projects.create(name=tenant_name, description=description, domain=self.user_domain_name)
 
     def add_user_role(self, user, role, tenant):
-        return self.keystone.roles.add_user_role(user=user, role=role, tenant=tenant)
+        if self.api_version == 2:
+            return self.keystone.roles.add_user_role(user=user, role=role, tenant=tenant)
+        else:
+            return self.keystone.roles.grant(user=user, role=role, project=tenant)
 
     def import_keypair(self, os_tenant_id=None):
         if not self.nova and not os_tenant_id:
@@ -361,6 +364,9 @@ class OSClient(object):
             self.set_nova(os_project_id)
         return self.nova.keypairs.list()
 
+    def list_domains(self):
+        return self.keystone.domains.list()
+
 
 def _list_images_single_tenant(tenant_name, testbed, testbed_name):
     os_client = OSClient(testbed_name, testbed, tenant_name)
@@ -483,11 +489,11 @@ def get_username_hash(username):
 if __name__ == '__main__':
     client = OSClient('fokus', get_openstack_credentials().get('fokus'))
     project_id = get_openstack_credentials().get('fokus').get("admin_project_id")
-    print(client.list_images(project_id))
-    print(client.list_tenants())
-    print(client.list_users())
-
-    for u in client.list_users():
-        print(dir(u))
-    print(client.list_networks(project_id))
-    print(client.list_keypairs(project_id))
+    # print(client.list_images(project_id))
+    # print(client.list_tenants())
+    # print(client.list_users())
+    # print(client.list_networks(project_id))
+    # print(client.list_keypairs(project_id))
+    # print(client.list_domains())
+    for i in dir(client.keystone.role_assignments.create):
+        print(i)
