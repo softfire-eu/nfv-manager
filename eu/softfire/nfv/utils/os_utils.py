@@ -127,10 +127,13 @@ class OSClient(object):
                 return user
 
     def get_role(self, role_to_find):
-        roles = self.keystone.roles.list()
+        roles = self.list_roles()
         for role in roles:
             if role.name == role_to_find:
                 return role
+
+    def list_roles(self):
+        return self.keystone.roles.list()
 
     def list_tenants(self):
         if self.api_version == 3:
