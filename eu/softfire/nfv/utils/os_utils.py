@@ -140,7 +140,8 @@ class OSClient(object):
         if self.api_version == 2:
             return self.keystone.tenants.create(tenant_name=tenant_name, description=description)
         else:
-            return self.keystone.projects.create(name=tenant_name, description=description, domain=self.user_domain_name)
+            return self.keystone.projects.create(name=tenant_name, description=description,
+                                                 domain=self.user_domain_name)
 
     def add_user_role(self, user, role, tenant):
         if self.api_version == 2:
@@ -352,7 +353,11 @@ class OSClient(object):
                 u_username = u.name
             if u_username == username:
                 return u
-        return self.keystone.users.create(username, password, tenant_id=tenant_id)
+        if self.api_version == 2:
+            return self.keystone.users.create(username, password, tenant_id=tenant_id)
+        else:
+            return self.keystone.users.create(name=username, password=password,
+                                              project=self.get_project_from_id(tenant_id))
 
     def list_users(self):
         return self.keystone.users.list()
@@ -373,6 +378,12 @@ class OSClient(object):
 
     def list_domains(self):
         return self.keystone.domains.list()
+
+    def get_project_from_id(self, tenant_id):
+        for p in self.list_tenants():
+            if p.id == tenant_id:
+                return p
+        raise OpenstackClientError("Project with id %s not found")
 
 
 def _list_images_single_tenant(tenant_name, testbed, testbed_name):
