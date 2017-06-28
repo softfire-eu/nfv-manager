@@ -80,6 +80,8 @@ class OSClient(object):
         if self.api_version == 3:
             return keystoneclient.v3.client.Client(session=self._get_session(project_id))
         elif self.api_version == 2:
+            if not project_id:
+                project_id = self.tenant_name or self.admin_tenant_name
             return keystoneclient.v2_0.client.Client(username=self.username,
                                                      password=self.password,
                                                      tenant_name=project_id,
