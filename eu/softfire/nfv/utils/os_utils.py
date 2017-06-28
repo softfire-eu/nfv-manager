@@ -6,7 +6,6 @@ import neutronclient
 from glanceclient import Client as Glance
 from keystoneauth1 import session
 from keystoneauth1.identity import v2, v3
-from keystoneclient import client as ks_client
 from neutronclient.common.exceptions import IpAddressGenerationFailureClient
 from neutronclient.v2_0.client import Client as Neutron
 from novaclient.client import Client as Nova
@@ -65,12 +64,11 @@ class OSClient(object):
                 raise OpenstackClientError("Missing project id required if using v3")
 
             logger.debug("Creating keystone client")
-            if self.project_id:
-                self.keystone = ks_client.Client(session=self._get_session(project_id))
+            if self.api_version == 3:
+                self.keystone = self._create_keystone_client(project_id)
                 self.os_tenant_id = project_id
             else:
-                self.keystone = ks_client.Client(session=self._get_session())
-                self.keystone = ks_client.Client(session=self._get_session(self._get_tenant_id_from_name(tenant_name)))
+                self.keystone = self._create_keystone_client(tenant_name)
                 self.os_tenant_id = self.project_id = self._get_tenant_id_from_name(tenant_name)
 
             logger.debug("Created Keystone client %s" % self.keystone)
@@ -78,12 +76,14 @@ class OSClient(object):
             self.set_neutron(self.os_tenant_id)
             self.set_glance(self.os_tenant_id)
 
-    def _create_keystone_client(self):
+    def _create_keystone_client(self, project_id=None):
         if self.api_version == 3:
-            return keystoneclient.v3.client.Client(session=self._get_session())
+            return keystoneclient.v3.client.Client(session=self._get_session(project_id))
         elif self.api_version == 2:
-            return keystoneclient.v2_0.client.Client(username=self.username, password=self.password,
-                                                     tenant_name=self.tenant_name, auth_url=self.auth_url)
+            return keystoneclient.v2_0.client.Client(username=self.username,
+                                                     password=self.password,
+                                                     tenant_name=project_id,
+                                                     auth_url=self.auth_url)
 
     def set_nova(self, os_tenant_id):
         self.nova = Nova('2.1', session=self._get_session(os_tenant_id))
@@ -115,7 +115,7 @@ class OSClient(object):
             self.neutron = Neutron(session=self._get_session(os_tenant_id))
 
     def get_user(self, username=None):
-        users = self.keystone.users.list()
+        users = self.list_users()
         if username:
             un = username
         else:
