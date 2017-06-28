@@ -56,8 +56,8 @@ class OSClient(object):
             self.keystone = self._create_keystone_client()
             logger.debug("Created Keystone client %s" % self.keystone)
         else:
-            self.os_tenant_id = self.project_id = self._get_tenant_id_from_name(tenant_name)
             self.tenant_name = tenant_name
+            self.project_id = project_id
 
             if self.api_version == 2 and not self.tenant_name:
                 raise OpenstackClientError("Missing tenant name required if using v2")
@@ -65,7 +65,14 @@ class OSClient(object):
                 raise OpenstackClientError("Missing project id required if using v3")
 
             logger.debug("Creating keystone client")
-            self.keystone = ks_client.Client(session=self._get_session())
+            if self.project_id:
+                self.keystone = ks_client.Client(session=self._get_session(project_id))
+                self.os_tenant_id = project_id
+            else:
+                self.keystone = ks_client.Client(session=self._get_session())
+                self.keystone = ks_client.Client(session=self._get_session(self._get_tenant_id_from_name(tenant_name)))
+                self.os_tenant_id = self.project_id = self._get_tenant_id_from_name(tenant_name)
+
             logger.debug("Created Keystone client %s" % self.keystone)
             self.set_nova(self.os_tenant_id)
             self.set_neutron(self.os_tenant_id)
