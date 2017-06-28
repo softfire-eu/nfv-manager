@@ -284,10 +284,13 @@ class OSClient(object):
             pwd = self.password
 
         if self.project_id:
-            tenant = self.project_id
             tenant_id_from_name = self.project_id
         else:
             tenant_id_from_name = self._get_tenant_id_from_name(tenant_name)
+
+        if self.api_version == 2:
+            tenant = tenant_id_from_name
+        else:
             tenant = tenant_name
 
         if not self.keypair:
@@ -498,7 +501,7 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
             logger.warn(e.args)
 
     sec_group = os_client.create_security_group()
-    vim_instance = os_client.get_vim_instance()
+    vim_instance = os_client.get_vim_instance(tenant_name=tenant_name)
     return os_tenant_id, vim_instance
 
 
