@@ -133,7 +133,7 @@ class OSClient(object):
         if self.api_version == 2:
             return self.keystone.tenants.create(tenant_name=tenant_name, description=description)
         else:
-            return self.keystone.projects.create(tenant_name=tenant_name, description=description)
+            return self.keystone.projects.create(name=tenant_name, description=description, domain=self.user_domain_name)
 
     def add_user_role(self, user, role, tenant):
         return self.keystone.roles.add_user_role(user=user, role=role, tenant=tenant)
