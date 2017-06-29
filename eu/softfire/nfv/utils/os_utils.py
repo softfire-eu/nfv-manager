@@ -516,17 +516,14 @@ def get_username_hash(username):
 
 
 if __name__ == '__main__':
-    testbed_name = 'fokus'
-    # testbed_name = 'ericsson'
-    credentials = get_openstack_credentials().get(testbed_name)
-    client = OSClient(testbed_name, credentials)
-    project_id = credentials.get("admin_project_id")
-    print(client.list_images(project_id))
-    print(client.list_tenants())
-    print(client.list_users())
-    print(client.list_roles())
-    print(client.list_networks(project_id))
-    print(client.list_keypairs(project_id))
-    print(client.list_domains())
-    # for i in dir(client.keystone.role_assignments.create):
-    #     print(i)
+    for testbed_name, credentials in get_openstack_credentials().items():
+        print("Executing list test on testbed %s" % testbed_name)
+        client = OSClient(testbed_name, credentials)
+        project_id = credentials.get("admin_project_id")
+        print(client.list_images(project_id))
+        print(client.list_tenants())
+        print(client.list_users())
+        print(client.list_roles())
+        print(client.list_networks(project_id))
+        print(client.list_keypairs(project_id))
+        print(client.list_domains())
