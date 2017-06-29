@@ -147,7 +147,7 @@ class OSClient(object):
             return self.keystone.tenants.create(tenant_name=tenant_name, description=description)
         else:
             return self.keystone.projects.create(name=tenant_name, description=description,
-                                                 domain=self.user_domain_name)
+                                                 domain=self.user_domain_name.lower())
 
     def add_user_role(self, user, role, tenant):
         if self.api_version == 2:
@@ -487,26 +487,30 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
 
     keypair = os_client.import_keypair(os_tenant_id=os_tenant_id)
     logger.debug("imported keypair %s " % keypair)
-    # ext_net = os_client.get_ext_net(testbed.get('ext_net_name'))
-    #
-    # if ext_net is None:
-    #     logger.error(
-    #         "A shared External Network called %s must exist! "
-    #         "Please create one in your openstack instance" % testbed.get('ext_net_name')
-    #     )
-    #     raise OpenstackClientError("A shared External Network called softfire-network must exist! "
-    #                                "Please create one in your openstack instance")
-    # networks, subnets, router_id = os_client.create_networks_and_subnets(ext_net)
-    # logger.debug("Created Network %s, Subnet %s, Router %s" % (networks, subnets, router_id))
+    try:
+        ext_net = os_client.get_ext_net(testbed.get('ext_net_name'))
 
-    fips = testbed.get("allocate-fip")
-    if fips is not None and int(fips) > 0:
-        try:
-            os_client.allocate_floating_ips(int(fips), ext_net)
-        except OpenstackClientError as e:
-            logger.warn(e.args)
+        if ext_net is None:
+            logger.error(
+                "A shared External Network called %s must exist! "
+                "Please create one in your openstack instance" % testbed.get('ext_net_name')
+            )
+            raise OpenstackClientError("A shared External Network called softfire-network must exist! "
+                                       "Please create one in your openstack instance")
+        networks, subnets, router_id = os_client.create_networks_and_subnets(ext_net)
+        logger.debug("Created Network %s, Subnet %s, Router %s" % (networks, subnets, router_id))
 
-    sec_group = os_client.create_security_group()
+        fips = testbed.get("allocate-fip")
+        if fips is not None and int(fips) > 0:
+            try:
+                os_client.allocate_floating_ips(int(fips), ext_net)
+            except OpenstackClientError as e:
+                logger.warn(e.args)
+
+    except:
+        logger.warning("Not able to get ext net")
+
+    os_client.create_security_group()
     vim_instance = os_client.get_vim_instance(tenant_name=tenant_name)
     return os_tenant_id, vim_instance
 
