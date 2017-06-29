@@ -480,8 +480,11 @@ class NfvManager(AbstractManager):
             for testbed_name, v in os_tenants.items():
                 tenant_id = v.get('tenant_id')
                 vim_instance = v.get('vim_instance')
-                vi = ob_client.create_vim_instance(vim_instance)
-                logger.debug("created vim instance with id: %s" % vi.get('id'))
+                try:
+                    vi = ob_client.create_vim_instance(vim_instance)
+                    logger.debug("created vim instance with id: %s" % vi.get('id'))
+                except NfvoException:
+                    logger.warning("Not able to upload vim %s" % vi)
                 testbed_tenants[TESTBED_MAPPING[testbed_name]] = tenant_id
 
         for k, v in testbed_tenants.items():
