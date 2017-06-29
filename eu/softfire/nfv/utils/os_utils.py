@@ -511,7 +511,7 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
         logger.warning("Not able to get ext net")
 
     os_client.create_security_group()
-    vim_instance = os_client.get_vim_instance(tenant_name=tenant_name)
+    vim_instance = os_client.get_vim_instance(tenant_name=tenant_name, username=username, password=password)
     return os_tenant_id, vim_instance
 
 
