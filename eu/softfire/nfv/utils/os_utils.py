@@ -299,9 +299,9 @@ class OSClient(object):
         else:
             tenant = tenant_name
 
-        if not self.keypair:
-            logger.debug("Using project id: %s" % tenant_id_from_name)
-            self.keypair = self.import_keypair(os_tenant_id=tenant_id_from_name).name
+        # if not self.keypair:
+        #     logger.debug("Using project id: %s" % tenant_id_from_name)
+        #     self.keypair = self.import_keypair(os_tenant_id=tenant_id_from_name).name
 
         if not self.sec_group:
             self.set_neutron(tenant_id_from_name)
@@ -313,7 +313,7 @@ class OSClient(object):
             "tenant": tenant,
             "username": un,
             "password": pwd,
-            "keyPair": self.keypair,
+            # "keyPair": self.keypair,
             "securityGroups": [
                 self.sec_group['name']
             ],
@@ -455,10 +455,10 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
 
     logger.debug("Got User %s" % admin_user)
     admin_role = os_client.get_role('admin')
-    try:
-        user_role = os_client.get_role('_member_')
-    except:
-        user_role = os_client.get_role('member')
+    # try:
+    user_role = admin_role
+    # except:
+    #     user_role = os_client.get_role('member')
 
     logger.debug("Got Role %s" % admin_role)
     for tenant in os_client.list_tenants():
@@ -485,8 +485,8 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
 
     os_client = OSClient(testbed_name, testbed, project_id=os_tenant_id)
 
-    keypair = os_client.import_keypair(os_tenant_id=os_tenant_id)
-    logger.debug("imported keypair %s " % keypair)
+    # keypair = os_client.import_keypair(os_tenant_id=os_tenant_id)
+    # logger.debug("imported keypair %s " % keypair)
     try:
         ext_net = os_client.get_ext_net(testbed.get('ext_net_name'))
 
