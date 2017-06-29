@@ -487,15 +487,15 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
 
     keypair = os_client.import_keypair(os_tenant_id=os_tenant_id)
     logger.debug("imported keypair %s " % keypair)
-    ext_net = os_client.get_ext_net(testbed.get('ext_net_name'))
-
-    if ext_net is None:
-        logger.error(
-            "A shared External Network called %s must exist! "
-            "Please create one in your openstack instance" % testbed.get('ext_net_name')
-        )
-        raise OpenstackClientError("A shared External Network called softfire-network must exist! "
-                                   "Please create one in your openstack instance")
+    # ext_net = os_client.get_ext_net(testbed.get('ext_net_name'))
+    #
+    # if ext_net is None:
+    #     logger.error(
+    #         "A shared External Network called %s must exist! "
+    #         "Please create one in your openstack instance" % testbed.get('ext_net_name')
+    #     )
+    #     raise OpenstackClientError("A shared External Network called softfire-network must exist! "
+    #                                "Please create one in your openstack instance")
     # networks, subnets, router_id = os_client.create_networks_and_subnets(ext_net)
     # logger.debug("Created Network %s, Subnet %s, Router %s" % (networks, subnets, router_id))
 
