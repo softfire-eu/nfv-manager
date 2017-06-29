@@ -165,9 +165,10 @@ class OSClient(object):
         for keypair in self.list_keypairs(os_tenant_id):
             if keypair.name == keypair_name:
                 return keypair
-        kargs = {"name": keypair_name,
-                 "public_key": open(get_config().get('system', 'softfire-public-key'), "r").read()}
-        return self.nova.keypairs.create(**kargs)
+        with open(get_config().get('system', 'softfire-public-key'), "r") as sosftfire_ssh_pub_key:
+            kargs = {"name": keypair_name,
+                     "public_key": sosftfire_ssh_pub_key.read()}
+            return self.nova.keypairs.create(**kargs)
 
     def get_ext_net(self, ext_net_name='softfire-network'):
         return [ext_net for ext_net in self.neutron.list_networks()['networks'] if

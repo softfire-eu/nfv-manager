@@ -261,6 +261,8 @@ def remove_nsr_to_check(nsr_id):
 class NfvManager(AbstractManager):
     def __init__(self, config_file_path):
         super().__init__(config_file_path)
+        with open(get_config().get('system', 'softfire-public-key'), "r") as sosftfire_ssh_pub_key:
+            self.softfire_pub_key = sosftfire_ssh_pub_key.read()
 
     def validate_resources(self, user_info=None, payload=None) -> None:
 
@@ -357,6 +359,7 @@ class NfvManager(AbstractManager):
         resource_id = resource_dict.get("properties").get("resource_id")
         file_name = resource_dict.get("properties").get("file_name")
         nsd_name = resource_dict.get("properties").get("resource_id")
+        ob_client.import_key(self.softfire_pub_key, nsd_name)
         if ssh_pub_key:
             ob_client.import_key(ssh_pub_key, nsd_name)
         temp_csar_location = "{}/{}".format(
