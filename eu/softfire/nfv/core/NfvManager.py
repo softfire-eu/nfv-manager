@@ -359,7 +359,7 @@ class NfvManager(AbstractManager):
         resource_id = resource_dict.get("properties").get("resource_id")
         file_name = resource_dict.get("properties").get("file_name")
         nsd_name = resource_dict.get("properties").get("resource_id")
-        ob_client.import_key(self.softfire_pub_key, nsd_name)
+        ob_client.import_key(self.softfire_pub_key, 'softfire-key')
         if ssh_pub_key:
             ob_client.import_key(ssh_pub_key, nsd_name)
         temp_csar_location = "{}/{}".format(
@@ -402,7 +402,7 @@ class NfvManager(AbstractManager):
 
             body = json.dumps({
                 "vduVimInstances": vdu_vim_instances,
-                "keys": [nsd_name]
+                "keys": [nsd_name, 'softfire-key']
             })
             nsr = ob_client.create_nsr(nsd.get('id'), body=body)
             add_nsr_to_check(user_info.name, nsr)
