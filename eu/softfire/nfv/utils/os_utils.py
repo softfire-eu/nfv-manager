@@ -3,6 +3,7 @@ import traceback
 
 import keystoneclient
 import neutronclient
+import time
 from glanceclient import Client as Glance
 from keystoneauth1 import session
 from keystoneauth1.identity import v2, v3
@@ -282,7 +283,7 @@ class OSClient(object):
         self.sec_group = sec_group['security_group']
         return self.sec_group
 
-    def get_vim_instance(self, tenant_name=None, username=None, password=None):
+    def get_vim_instance(self, tenant_name, username=None, password=None):
         if username:
             un = username
         else:
@@ -292,33 +293,27 @@ class OSClient(object):
         else:
             pwd = self.password
 
-        if self.project_id:
-            tenant_id_from_name = self.project_id
-        else:
-            tenant_id_from_name = self._get_tenant_id_from_name(tenant_name)
-
-        if self.api_version == 3:
-            tenant = tenant_id_from_name
-        else:
-            tenant = tenant_name
-
         # if not self.keypair:
         #     logger.debug("Using project id: %s" % tenant_id_from_name)
         #     self.keypair = self.import_keypair(os_tenant_id=tenant_id_from_name).name
 
-        if not self.sec_group:
-            self.set_neutron(tenant_id_from_name)
-            self.sec_group = self.create_security_group()
+        # if not self.sec_group:
+        #     if self.api_version == 3:
+        #         self.set_neutron(tenant_name)
+        #     else:
+        #         self.set_neutron(self._get_tenant_id_from_name(tenant_name))
+        #     self.sec_group = self.create_security_group()
 
+        logger.debug("Using tenant id: %s " % tenant_name)
         return {
             "name": "vim-instance-%s" % self.testbed_name,
             "authUrl": self.auth_url,
-            "tenant": tenant,
+            "tenant": tenant_name,
             "username": un,
             "password": pwd,
             # "keyPair": self.keypair,
             "securityGroups": [
-                self.sec_group['name']
+                'default'
             ],
             "type": "openstack",
             "location": {
@@ -475,7 +470,11 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
                 exp_user = os_client.create_user(username, password)
                 os_client.add_user_role(user=exp_user, role=user_role, tenant=tenant.id)
                 os_client.add_user_role(user=admin_user, role=admin_role, tenant=tenant.id)
-            return tenant.id, os_client.get_vim_instance(tenant_name, username, password)
+            if os_client.api_version == 2:
+                vim_instance = os_client.get_vim_instance(tenant_name=tenant_name, username=username, password=password)
+            else:
+                vim_instance = os_client.get_vim_instance(tenant_name=tenant.id, username=username, password=password)
+            return tenant.id, vim_instance
 
     tenant = os_client.create_tenant(tenant_name=tenant_name, description='softfire tenant for user %s' % tenant_name)
     logger.debug("Created tenant %s" % tenant)
@@ -500,21 +499,24 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
             )
             raise OpenstackClientError("A shared External Network called softfire-network must exist! "
                                        "Please create one in your openstack instance")
-        networks, subnets, router_id = os_client.create_networks_and_subnets(ext_net)
-        logger.debug("Created Network %s, Subnet %s, Router %s" % (networks, subnets, router_id))
+            # networks, subnets, router_id = os_client.create_networks_and_subnets(ext_net)
+            # logger.debug("Created Network %s, Subnet %s, Router %s" % (networks, subnets, router_id))
 
-        fips = testbed.get("allocate-fip")
-        if fips is not None and int(fips) > 0:
-            try:
-                os_client.allocate_floating_ips(int(fips), ext_net)
-            except OpenstackClientError as e:
-                logger.warn(e.args)
+            fips = testbed.get("allocate-fip")
+            if fips is not None and int(fips) > 0:
+                try:
+                    os_client.allocate_floating_ips(int(fips), ext_net)
+                except OpenstackClientError as e:
+                    logger.warn(e.args)
 
     except:
         logger.warning("Not able to get ext net")
 
     os_client.create_security_group()
-    vim_instance = os_client.get_vim_instance(tenant_name=tenant_name, username=username, password=password)
+    if os_client.api_version == 2:
+        vim_instance = os_client.get_vim_instance(tenant_name=tenant_name, username=username, password=password)
+    else:
+        vim_instance = os_client.get_vim_instance(tenant_name=tenant.id, username=username, password=password)
     return os_tenant_id, vim_instance
 
 
