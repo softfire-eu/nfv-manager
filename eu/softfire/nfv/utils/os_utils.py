@@ -30,6 +30,8 @@ class OSClient(object):
         self.username = self.testbed.get('username')
         self.password = self.testbed.get('password')
         self.auth_url = self.testbed.get("auth_url")
+        if self.auth_url.endswith('/'):
+            self.auth_url = self.auth_url[:-1]
         self.admin_tenant_name = self.testbed.get("admin_tenant_name")
         self.admin_project_id = self.testbed.get("admin_project_id")
         if not self.admin_tenant_name and not self.admin_project_id:
@@ -456,10 +458,10 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
 
     logger.debug("Got User %s" % admin_user)
     admin_role = os_client.get_role('admin')
-    # try:
-    user_role = admin_role
-    # except:
-    #     user_role = os_client.get_role('member')
+    try:
+        user_role = os_client.get_role('_member_')
+    except:
+        user_role = os_client.get_role('member')
 
     logger.debug("Got Role %s" % admin_role)
     for tenant in os_client.list_tenants():
