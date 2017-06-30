@@ -17,6 +17,7 @@ from eu.softfire.nfv.utils.utils import get_logger, get_config, get_openstack_cr
 logger = get_logger(__name__)
 
 NETWORKS = ["mgmt", "net_a", "net_b", "net_c", "net_d", "private", "softfire-internal"]
+sec_group_name = 'ob_sec_group'
 
 
 class OSClient(object):
@@ -178,7 +179,11 @@ class OSClient(object):
                 ext_net['router:external'] and ext_net['name'] == ext_net_name][0]
 
     def allocate_floating_ips(self, fip_num=0, ext_net='softfire-network'):
-        body = {"floatingip": {"floating_network_id": ext_net['id']}}
+        body = {
+            "floatingip": {
+                "floating_network_id": ext_net['id']
+            }
+        }
         for i in range(fip_num):
             try:
                 self.neutron.create_floatingip(body=body)
@@ -265,15 +270,17 @@ class OSClient(object):
             logger.error("error while creating a rule: %s" % e.message)
             pass
 
-    def create_security_group(self, sec_group_name='ob_sec_group'):
+    def create_security_group(self, project_id, sec_g_name=None):
+        if not sec_g_name:
+            sec_g_name = sec_group_name
         sec_group = {}
-        for sg in self.neutron.list_security_groups()['security_groups']:
-            if sg['name'] == sec_group_name:
+        for sg in self.list_sec_group(project_id):
+            if sg['name'] == sec_g_name:
                 sec_group['security_group'] = sg
                 break
         if len(sec_group) == 0:
             body = {"security_group": {
-                'name': sec_group_name,
+                'name': sec_g_name,
                 'description': 'openbaton security group',
             }}
             sec_group = self.neutron.create_security_group(body=body)
@@ -282,6 +289,11 @@ class OSClient(object):
             self.create_rule(sec_group, 'icmp')
         self.sec_group = sec_group['security_group']
         return self.sec_group
+
+    def list_sec_group(self, os_project_id):
+        if not self.neutron:
+            self.set_neutron(os_project_id)
+        return [sec for sec in self.neutron.list_security_groups()['security_groups'] if (sec.get('tenant_id') is not None and sec.get('tenant_id') == os_project_id) or (sec.get('project_id') is not None and sec.get('project_id') == os_project_id)]
 
     def get_vim_instance(self, tenant_name, username=None, password=None):
         if username:
@@ -293,27 +305,16 @@ class OSClient(object):
         else:
             pwd = self.password
 
-        # if not self.keypair:
-        #     logger.debug("Using project id: %s" % tenant_id_from_name)
-        #     self.keypair = self.import_keypair(os_tenant_id=tenant_id_from_name).name
-
-        # if not self.sec_group:
-        #     if self.api_version == 3:
-        #         self.set_neutron(tenant_name)
-        #     else:
-        #         self.set_neutron(self._get_tenant_id_from_name(tenant_name))
-        #     self.sec_group = self.create_security_group()
-
         logger.debug("Using tenant id: %s " % tenant_name)
+
         return {
             "name": "vim-instance-%s" % self.testbed_name,
             "authUrl": self.auth_url,
             "tenant": tenant_name,
             "username": un,
             "password": pwd,
-            # "keyPair": self.keypair,
             "securityGroups": [
-                'default'
+                'default', sec_group_name
             ],
             "type": "openstack",
             "location": {
@@ -437,7 +438,7 @@ def create_os_project(username, password, tenant_name, testbed_name=None):
             except:
                 logger.error("Not able to create project in testbed %s" % name)
                 traceback.print_exc()
-                return
+                continue
     else:
         os_tenant_id, vim_instance = _create_single_project(tenant_name,
                                                             openstack_credentials[testbed_name],
@@ -487,8 +488,6 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
 
     os_client = OSClient(testbed_name, testbed, project_id=os_tenant_id)
 
-    # keypair = os_client.import_keypair(os_tenant_id=os_tenant_id)
-    # logger.debug("imported keypair %s " % keypair)
     try:
         ext_net = os_client.get_ext_net(testbed.get('ext_net_name'))
 
@@ -499,20 +498,20 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
             )
             raise OpenstackClientError("A shared External Network called softfire-network must exist! "
                                        "Please create one in your openstack instance")
-            # networks, subnets, router_id = os_client.create_networks_and_subnets(ext_net)
-            # logger.debug("Created Network %s, Subnet %s, Router %s" % (networks, subnets, router_id))
+        # networks, subnets, router_id = os_client.create_networks_and_subnets(ext_net)
+        # logger.debug("Created Network %s, Subnet %s, Router %s" % (networks, subnets, router_id))
 
-            fips = testbed.get("allocate-fip")
-            if fips is not None and int(fips) > 0:
-                try:
-                    os_client.allocate_floating_ips(int(fips), ext_net)
-                except OpenstackClientError as e:
-                    logger.warn(e.args)
+        fips = testbed.get("allocate-fip")
+        if fips is not None and int(fips) > 0:
+            try:
+                os_client.allocate_floating_ips(int(fips), ext_net)
+            except OpenstackClientError as e:
+                logger.warn(e.args)
 
     except:
         logger.warning("Not able to get ext net")
 
-    os_client.create_security_group()
+    os_client.create_security_group(os_tenant_id)
     if os_client.api_version == 2:
         vim_instance = os_client.get_vim_instance(tenant_name=tenant_name, username=username, password=password)
     else:
@@ -536,3 +535,5 @@ if __name__ == '__main__':
         print(client.list_networks(project_id))
         print(client.list_keypairs(project_id))
         print(client.list_domains())
+        print(client.list_sec_group(project_id))
+
