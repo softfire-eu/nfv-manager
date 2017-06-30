@@ -351,7 +351,6 @@ class NfvManager(AbstractManager):
              :rtype: ProvideResourceResponse
             """
         ob_client = OBClient(user_info.name)
-
         logger.debug("Payload is \n%s" % payload)
         resource_dict = json.loads(payload)
         logger.debug("Received %s " % resource_dict)
@@ -545,7 +544,12 @@ class NfvManager(AbstractManager):
 
         logger.info("Deleting resources for user: %s" % user_info.name)
         logger.debug("Received this payload: %s" % payload)
-        nsr = json.loads(payload)
+        try:
+          nsr = json.loads(payload)
+        except:
+            logger.error('Could not parse release resource payload to JSON: {}'.format(payload))
+            traceback.print_exc()
+            return
         nsd_id = nsr.get('descriptor_reference')
         try:
             nsd = json.loads(ob_client.get_nsd(nsd_id))
