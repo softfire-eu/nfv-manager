@@ -425,8 +425,9 @@ class NfvManager(AbstractManager):
                         vdu_vim_instances[vdu.get('name')] = ["vim-instance-%s" % vim_name for vim_name in
                                                               testbeds.values()]
             else:
-                for vdu_name in nsd_chosen.get("vnf_types"):
-                    vdu_vim_instances[vdu_name] = [testbeds.get(vdu_name)]
+                logger.debug("Adding testbed mapping vdu : %s" % testbeds)
+                for vdu_name, testbed in testbeds.items():
+                    vdu_vim_instances[vdu_name] = [testbed]
             body = json.dumps({
                 "vduVimInstances": vdu_vim_instances
             })
