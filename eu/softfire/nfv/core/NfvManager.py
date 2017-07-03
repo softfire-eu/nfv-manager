@@ -429,7 +429,8 @@ class NfvManager(AbstractManager):
                 for vdu_name, testbed in testbeds.items():
                     vdu_vim_instances[vdu_name] = [testbed]
             body = json.dumps({
-                "vduVimInstances": vdu_vim_instances
+                "vduVimInstances": vdu_vim_instances,
+                "keys": [nsd_name, 'softfire-key']
             })
             if nsd:
                 nsr = ob_client.create_nsr(nsd.get('id'), body)
