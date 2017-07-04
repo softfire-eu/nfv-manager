@@ -357,7 +357,7 @@ class NfvManager(AbstractManager):
         ssh_pub_key = resource_dict.get("properties").get('ssh_pub_key')
         resource_id = resource_dict.get("properties").get("resource_id")
         file_name = resource_dict.get("properties").get("file_name")
-        nsd_name = resource_dict.get("properties").get("resource_id")
+        nsd_name = resource_dict.get("properties").get("nsd_name")
         ob_client.import_key(self.softfire_pub_key, 'softfire-key')
         if ssh_pub_key:
             ob_client.import_key(ssh_pub_key, nsd_name)
