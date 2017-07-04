@@ -358,14 +358,18 @@ class NfvManager(AbstractManager):
         resource_id = resource_dict.get("properties").get("resource_id")
         file_name = resource_dict.get("properties").get("file_name")
         nsd_name = resource_dict.get("properties").get("nsd_name")
+
         ob_client.import_key(self.softfire_pub_key, 'softfire-key')
         if ssh_pub_key:
+            logger.debug("creating user-key called: %s" % nsd_name)
             ob_client.import_key(ssh_pub_key, nsd_name)
+
         temp_csar_location = "{}/{}".format(
             self.get_config_value("system", "temp-csar-location", '/etc/softfire/experiment-nsd-csar').rstrip('/'),
             resource_id)
         available_nsds = get_available_nsds()
         nsd_chosen = available_nsds.get(resource_id)
+
         vnfds = []
         testbeds = resource_dict.get("properties").get("testbeds")
 
@@ -414,7 +418,7 @@ class NfvManager(AbstractManager):
                 temp_csar_location.rstrip('/'), user_info.name, file_name[6:])
             if os.path.exists(csar_nsd_file_path):
                 nsd = ob_client.create_nsd_from_csar(csar_nsd_file_path)
-                logger.debug("Created NSD: %s" % nsd)
+                logger.debug("Created NSD: %s" % nsd.get('name'))
             else:
                 raise MissingFileException("File %s was not found" % csar_nsd_file_path)
             vdu_vim_instances = {}
@@ -432,6 +436,7 @@ class NfvManager(AbstractManager):
                 "vduVimInstances": vdu_vim_instances,
                 "keys": [nsd_name, 'softfire-key']
             })
+            logger.debug("Deploy NSR with body: %s" % body)
             if nsd:
                 nsr = ob_client.create_nsr(nsd.get('id'), body)
                 add_nsr_to_check(user_info.name, nsr)
