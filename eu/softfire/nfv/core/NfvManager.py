@@ -360,9 +360,11 @@ class NfvManager(AbstractManager):
         nsd_name = resource_dict.get("properties").get("nsd_name")
 
         ob_client.import_key(self.softfire_pub_key, 'softfire-key')
+        nsr_keys_to_use = ['softfire-key']
         if ssh_pub_key:
             logger.debug("creating user-key called: %s" % nsd_name)
             ob_client.import_key(ssh_pub_key, nsd_name)
+            nsr_keys_to_use.append(nsd_name)
 
         temp_csar_location = "{}/{}".format(
             self.get_config_value("system", "temp-csar-location", '/etc/softfire/experiment-nsd-csar').rstrip('/'),
@@ -405,7 +407,7 @@ class NfvManager(AbstractManager):
 
             body = json.dumps({
                 "vduVimInstances": vdu_vim_instances,
-                "keys": [nsd_name, 'softfire-key']
+                "keys": nsr_keys_to_use
             })
             nsr = ob_client.create_nsr(nsd.get('id'), body=body)
             add_nsr_to_check(user_info.name, nsr)
@@ -434,7 +436,7 @@ class NfvManager(AbstractManager):
                     vdu_vim_instances[vdu_name] = ["vim-instance-%s" % testbed]
             body = json.dumps({
                 "vduVimInstances": vdu_vim_instances,
-                "keys": [nsd_name, 'softfire-key']
+                "keys": nsr_keys_to_use
             })
             logger.debug("Deploy NSR with body: %s" % body)
             if nsd:
