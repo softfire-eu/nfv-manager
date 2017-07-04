@@ -427,7 +427,7 @@ class NfvManager(AbstractManager):
             else:
                 logger.debug("Adding testbed mapping vdu : %s" % testbeds)
                 for vdu_name, testbed in testbeds.items():
-                    vdu_vim_instances[vdu_name] = [testbed]
+                    vdu_vim_instances[vdu_name] = ["vim-instance-%s" % testbed]
             body = json.dumps({
                 "vduVimInstances": vdu_vim_instances,
                 "keys": [nsd_name, 'softfire-key']
