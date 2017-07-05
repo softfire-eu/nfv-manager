@@ -18,6 +18,7 @@ from sqlalchemy.orm.exc import NoResultFound
 
 from eu.softfire.nfv.db.entities import Nsr
 from eu.softfire.nfv.db.repositories import find, delete, save
+from eu.softfire.nfv.utils import os_utils
 from eu.softfire.nfv.utils.exceptions import NfvResourceValidationError, NfvResourceDeleteException, \
     MissingFileException
 from eu.softfire.nfv.utils.os_utils import create_os_project
@@ -68,32 +69,32 @@ class OBClient(object):
 
         nfvo_ip = get_config("nfvo", "ip", CONFIG_FILE_PATH)
         nfvo_port = get_config("nfvo", "port", CONFIG_FILE_PATH)
-        self.agent = OpenBatonAgentFactory(nfvo_ip=nfvo_ip,
-                                           nfvo_port=nfvo_port,
-                                           https=https,
-                                           version=1,
-                                           username=username,
-                                           password=password,
-                                           project_id=None)
+        self.agent_factory = OpenBatonAgentFactory(nfvo_ip=nfvo_ip,
+                                                   nfvo_port=nfvo_port,
+                                                   https=https,
+                                                   version=1,
+                                                   username=username,
+                                                   password=password,
+                                                   project_id=None)
         if project_name:
             self.project_id = self._get_project_id(project_name)
             # self.agent._client.project_id = self.project_id
 
     def _get_project_id(self, project_name):
-        project_agent = self.agent.get_project_agent()
+        project_agent = self.agent_factory.get_project_agent()
         for project in json.loads(project_agent.find()):
             if project.get('name') == project_name:
                 return project.get('id')
         return None
 
     def list_nsds(self):
-        return self.agent.get_ns_descriptor_agent(self.project_id).find()
+        return self.agent_factory.get_ns_descriptor_agent(self.project_id).find()
 
     def create_nsr(self, nsd_id, body=None):
-        return self.agent.get_ns_records_agent(self.project_id).create(nsd_id, body)
+        return self.agent_factory.get_ns_records_agent(self.project_id).create(nsd_id, body)
 
     def delete_nsr(self, nsr_id):
-        return self.agent.get_ns_records_agent(self.project_id).delete(nsr_id)
+        return self.agent_factory.get_ns_records_agent(self.project_id).delete(nsr_id)
 
     def create_project(self, project):
         for p in json.loads(self.list_projects()):
@@ -101,7 +102,7 @@ class OBClient(object):
                 return p
         if isinstance(project, dict):
             project = json.dumps(project)
-        ob_project = self.agent.get_project_agent().create(project)
+        ob_project = self.agent_factory.get_project_agent().create(project)
         self.project_id = ob_project.get('id')
         return ob_project
 
@@ -113,7 +114,7 @@ class OBClient(object):
 
         if isinstance(user, dict):
             user = json.dumps(user)
-        return self.agent.get_user_agent(self.project_id).create(user)
+        return self.agent_factory.get_user_agent(self.project_id).create(user)
 
     def create_vim_instance(self, vim_instance):
         for vi in json.loads(self.list_vim_instances()):
@@ -123,22 +124,22 @@ class OBClient(object):
             vim_instance = json.dumps(vim_instance)
 
         logger.debug("Posting vim %s" % vim_instance)
-        return self.agent.get_vim_instance_agent(self.project_id).create(vim_instance)
+        return self.agent_factory.get_vim_instance_agent(self.project_id).create(vim_instance)
 
     def list_users(self):
-        return self.agent.get_user_agent(self.project_id).find()
+        return self.agent_factory.get_user_agent(self.project_id).find()
 
     def list_projects(self):
-        return self.agent.get_project_agent().find()
+        return self.agent_factory.get_project_agent().find()
 
     def list_vim_instances(self):
-        return self.agent.get_vim_instance_agent(self.project_id).find()
+        return self.agent_factory.get_vim_instance_agent(self.project_id).find()
 
     def list_images_network_flavors(self):
         images = []
         networks = []
         flavors = []
-        vim_instance_agent = self.agent.get_vim_instance_agent(self.project_id)
+        vim_instance_agent = self.agent_factory.get_vim_instance_agent(self.project_id)
 
         for vim_instance in json.loads(vim_instance_agent.find()):
 
@@ -171,13 +172,13 @@ class OBClient(object):
         return images, networks, flavors
 
     def upload_package(self, package_path, name=None):
-        package_agent = self.agent.get_vnf_package_agent(self.project_id)
+        package_agent = self.agent_factory.get_vnf_package_agent(self.project_id)
         try:
             return package_agent.create(package_path)
         except NfvoException as e:
             if not name:
                 raise e
-            for nsd in json.loads(self.agent.get_ns_descriptor_agent(self.project_id).find()):
+            for nsd in json.loads(self.agent_factory.get_ns_descriptor_agent(self.project_id).find()):
                 for vnfd in nsd.get('vnfd'):
                     if vnfd.get('name') == name:
                         return {"id": vnfd.get('id')}
@@ -188,23 +189,23 @@ class OBClient(object):
             nsd = json.dumps(nsd)
 
         logger.debug("Uplading really: \n%s" % nsd)
-        return self.agent.get_ns_descriptor_agent(self.project_id).create(nsd)
+        return self.agent_factory.get_ns_descriptor_agent(self.project_id).create(nsd)
 
     def get_nsd(self, nsd_id):
-        return self.agent.get_ns_descriptor_agent(self.project_id).find(nsd_id)
+        return self.agent_factory.get_ns_descriptor_agent(self.project_id).find(nsd_id)
 
     def delete_nsd(self, nsd_id):
-        self.agent.get_ns_descriptor_agent(self.project_id).delete(nsd_id)
+        self.agent_factory.get_ns_descriptor_agent(self.project_id).delete(nsd_id)
 
     def delete_vnfd(self, vnfd_id):
-        self.agent.get_vnf_descriptor_agent(self.project_id).delete(vnfd_id)
+        self.agent_factory.get_vnf_descriptor_agent(self.project_id).delete(vnfd_id)
 
     def get_nsr(self, nsr_id):
-        return self.agent.get_ns_records_agent(self.project_id).find(nsr_id)
+        return self.agent_factory.get_ns_records_agent(self.project_id).find(nsr_id)
 
     def import_key(self, ssh_pub_key, name):
 
-        key_agent = self.agent.get_key_agent(self.project_id)
+        key_agent = self.agent_factory.get_key_agent(self.project_id)
         for key in json.loads(key_agent.find()):
             if key.get('name') == name:
                 key_agent.delete(key.get('id'))
@@ -221,7 +222,15 @@ class OBClient(object):
         )
 
     def create_nsd_from_csar(self, location):
-        return self.agent.get_csarnsd_agent(self.project_id).create(location)
+        return self.agent_factory.get_csarnsd_agent(self.project_id).create(location)
+
+    def delete_user(self, username):
+        for u in json.loads(self.list_users()):
+            if u.get('username') == username:
+                self.agent_factory.get_user_agent(self.project_id).delete(u.get('id'))
+
+    def delete_project(self, ob_project_id):
+        self.agent_factory.get_project_agent().delete(ob_project_id)
 
 
 def get_nsrs_to_check():
@@ -256,6 +265,15 @@ def remove_nsr_to_check(nsr_id):
         delete(find(Nsr, _id=nsr_id))
     except NoResultFound:
         pass
+
+
+def _update_nsr(nsr):
+    logger.debug("Checking resources of user %s, nsr id %s" % (nsr.username, nsr.id))
+    ob_client = OBClient(nsr.username)
+    nsr_new = ob_client.get_nsr(nsr.id)
+    add_nsr_to_check(nsr.username, json.loads(nsr_new))
+    logger.debug("Status is: %s" % json.loads(nsr_new).get('status'))
+    return nsr_new
 
 
 class NfvManager(AbstractManager):
@@ -554,7 +572,7 @@ class NfvManager(AbstractManager):
         logger.info("Deleting resources for user: %s" % user_info.name)
         logger.debug("Received this payload: %s" % payload)
         try:
-          nsr = json.loads(payload)
+            nsr = json.loads(payload)
         except:
             logger.error('Could not parse release resource payload to JSON: {}'.format(payload))
             traceback.print_exc()
@@ -620,21 +638,21 @@ class NfvManager(AbstractManager):
                     if not result.get(nsr.username):
                         result[nsr.username] = []
                     if nsr.status.lower() not in ['active', 'error']:
-                        nsr_new = self._update_nsr(nsr)
+                        nsr_new = _update_nsr(nsr)
                         result[nsr.username].append(nsr_new)
             else:
                 if not result.get(nsrs.username):
                     result[nsrs.username] = []
                 if nsrs.status.lower() not in ['active', 'error']:
-                    nsr_new = self._update_nsr(nsrs)
+                    nsr_new = _update_nsr(nsrs)
                     result[nsrs.username].append(nsr_new)
 
         return result
 
-    def _update_nsr(self, nsr):
-        logger.debug("Checking resources of user %s, nsr id %s" % (nsr.username, nsr.id))
-        ob_client = OBClient(nsr.username)
-        nsr_new = ob_client.get_nsr(nsr.id)
-        add_nsr_to_check(nsr.username, json.loads(nsr_new))
-        logger.debug("Status is: %s" % json.loads(nsr_new).get('status'))
-        return nsr_new
+    def delete_user(self, user_info):
+        logger.debug("Removing user %s" % user_info)
+        username = user_info.name
+        os_utils.delete_tenant_and_user(username=username, testbed_tenants=user_info.testbed_tenants)
+        ob_client = OBClient(username)
+        ob_client.delete_user(username=username)
+        ob_client.delete_project(ob_project_id=user_info.ob_project_id)
