@@ -3,7 +3,6 @@ import traceback
 
 import keystoneclient
 import neutronclient
-import time
 from glanceclient import Client as Glance
 from keystoneauth1 import session
 from keystoneauth1.identity import v2, v3
@@ -12,7 +11,7 @@ from neutronclient.v2_0.client import Client as Neutron
 from novaclient.client import Client as Nova
 
 from eu.softfire.nfv.utils.exceptions import OpenstackClientError
-from eu.softfire.nfv.utils.utils import get_logger, get_config, get_openstack_credentials
+from eu.softfire.nfv.utils.utils import get_logger, get_config, get_openstack_credentials, get_testbed_name_from_id
 
 logger = get_logger(__name__)
 
@@ -293,7 +292,9 @@ class OSClient(object):
     def list_sec_group(self, os_project_id):
         if not self.neutron:
             self.set_neutron(os_project_id)
-        return [sec for sec in self.neutron.list_security_groups()['security_groups'] if (sec.get('tenant_id') is not None and sec.get('tenant_id') == os_project_id) or (sec.get('project_id') is not None and sec.get('project_id') == os_project_id)]
+        return [sec for sec in self.neutron.list_security_groups()['security_groups'] if
+                (sec.get('tenant_id') is not None and sec.get('tenant_id') == os_project_id) or (
+                    sec.get('project_id') is not None and sec.get('project_id') == os_project_id)]
 
     def get_vim_instance(self, tenant_name, username=None, password=None):
         if username:
@@ -355,7 +356,7 @@ class OSClient(object):
             if t.id == os_tenant_id:
                 return t.name
 
-    def create_user(self, username, password, tenant_id=None):
+    def create_user(self, username, password=None, tenant_id=None):
         for u in self.list_users():
             if hasattr(u, 'username'):
                 u_username = u.username
@@ -363,6 +364,8 @@ class OSClient(object):
                 u_username = u.name
             if u_username == username:
                 return u
+        if not password:
+            raise OpenstackClientError("Paswsord is needed to create user")
         if self.api_version == 2:
             return self.keystone.users.create(username, password, tenant_id=tenant_id)
         else:
@@ -394,6 +397,23 @@ class OSClient(object):
             if p.id == tenant_id:
                 return p
         raise OpenstackClientError("Project with id %s not found")
+
+    def delete_user(self, username):
+        try:
+            self.keystone.users.delete(self.create_user(username=username))
+        except:
+            traceback.print_exc()
+            logger.error("Not Able to delete user %s" % username)
+
+    def delete_project(self, project_id):
+        try:
+            if self.api_version == 2:
+                self.keystone.tenants.delete(project_id)
+            else:
+                self.keystone.projects.delete(project_id)
+        except:
+            traceback.print_exc()
+            logger.error("Not Able to delete project %s" % project_id)
 
 
 def _list_images_single_tenant(tenant_name, testbed, testbed_name):
@@ -523,6 +543,16 @@ def get_username_hash(username):
     return abs(hash(username))
 
 
+def delete_tenant_and_user(username, testbed_tenants):
+    openstack_credentials = get_openstack_credentials()
+    for testbed_id, project_id in testbed_tenants.items():
+        for testbed_name, credentials in openstack_credentials.items():
+            if get_testbed_name_from_id(testbed_id) == testbed_name:
+                os_client = OSClient(testbed_name, credentials)
+                os_client.delete_user(username)
+                os_client.delete_project(project_id)
+
+
 if __name__ == '__main__':
     for testbed_name, credentials in get_openstack_credentials().items():
         print("Executing list test on testbed %s" % testbed_name)
@@ -536,4 +566,3 @@ if __name__ == '__main__':
         print(client.list_keypairs(project_id))
         print(client.list_domains())
         print(client.list_sec_group(project_id))
-

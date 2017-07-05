@@ -3,7 +3,7 @@ import logging
 import logging.config
 import os
 
-from sdk.softfire.utils import get_config
+from sdk.softfire.utils import get_config, TESTBED_MAPPING
 
 from eu.softfire.nfv.utils.static_config import CONFIG_FILE_PATH
 
@@ -31,3 +31,9 @@ def get_openstack_credentials():
             return json.loads(f.read())
     else:
         raise FileNotFoundError("Openstack credentials file not found")
+
+
+def get_testbed_name_from_id(testbed_id):
+    for k, v in TESTBED_MAPPING.items():
+        if v == testbed_id:
+            return k
