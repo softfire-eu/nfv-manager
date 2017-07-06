@@ -47,7 +47,11 @@ class UpdateStatusThread(Thread):
                 try:
                     self.nfv_manager.send_update()
                 except Exception as e:
-                    logger.error("got error while updating resources: %s " % e.args)
+                    traceback.print_exc()
+                    if hasattr(e, 'args'):
+                        logger.error("got error while updating resources: %s " % e.args)
+                    else:
+                        logger.error("got unknown error while updating resources")
 
     def stop(self):
         self.stopped = True
@@ -232,6 +236,9 @@ class OBClient(object):
     def delete_project(self, ob_project_id):
         self.agent_factory.get_project_agent().delete(ob_project_id)
 
+    def list_nsrs(self):
+        return json.loads(self.agent_factory.get_ns_records_agent(self.project_id).find())
+
 
 def get_nsrs_to_check():
     return find(Nsr)
@@ -274,6 +281,38 @@ def _update_nsr(nsr):
     add_nsr_to_check(nsr.username, json.loads(nsr_new))
     logger.debug("Status is: %s" % json.loads(nsr_new).get('status'))
     return nsr_new
+
+
+def try_delete_vnfd(vnfd_id, ob_client):
+    try:
+        ob_client.delete_vnfd(vnfd_id)
+    except:
+        raise NfvResourceDeleteException('Not able to delete VNFD with id: %s' % vnfd_id)
+
+
+def try_delete_nsd(nsd_id, ob_client):
+    try:
+        ob_client.delete_nsd(nsd_id)
+    except:
+        raise NfvResourceDeleteException('Not able to delete NSD with id: %s' % nsd_id)
+
+
+def try_delete_nsr(nsr, ob_client):
+    try:
+        ob_client.delete_nsr(nsr.get('id'))
+    except:
+        raise NfvResourceDeleteException('Not able to delete NSR with id: %s' % nsr.get('id'))
+    timer = 500
+    time.sleep(5)
+    while True:
+        try:
+            nsr = json.loads(ob_client.get_nsr(nsr.get('id')))
+            if timer == 0:
+                raise NfvResourceDeleteException('Not able to delete NSR with id: %s' % nsr.get('id'))
+        except NfvoException:
+            return
+        timer -= 1
+        time.sleep(2)
 
 
 class NfvManager(AbstractManager):
@@ -374,6 +413,9 @@ class NfvManager(AbstractManager):
         logger.debug("Received %s " % resource_dict)
         ssh_pub_key = resource_dict.get("properties").get('ssh_pub_key')
         resource_id = resource_dict.get("properties").get("resource_id")
+        monitoring_ip = resource_dict.get("properties").get("floatingIp")
+        if not monitoring_ip:
+            monitoring_ip = ""
         file_name = resource_dict.get("properties").get("file_name")
         nsd_name = resource_dict.get("properties").get("nsd_name")
 
@@ -425,7 +467,8 @@ class NfvManager(AbstractManager):
 
             body = json.dumps({
                 "vduVimInstances": vdu_vim_instances,
-                "keys": nsr_keys_to_use
+                "keys": nsr_keys_to_use,
+                "monitoringIp": monitoring_ip
             })
             nsr = ob_client.create_nsr(nsd.get('id'), body=body)
             add_nsr_to_check(user_info.name, nsr)
@@ -454,12 +497,15 @@ class NfvManager(AbstractManager):
                     vdu_vim_instances[vdu_name] = ["vim-instance-%s" % testbed]
             body = json.dumps({
                 "vduVimInstances": vdu_vim_instances,
-                "keys": nsr_keys_to_use
+                "keys": nsr_keys_to_use,
+                "monitoringIp": monitoring_ip
             })
             logger.debug("Deploy NSR with body: %s" % body)
+
             if nsd:
                 nsr = ob_client.create_nsr(nsd.get('id'), body)
                 add_nsr_to_check(user_info.name, nsr)
+
         if isinstance(nsr, dict):
             nsr = json.dumps(nsr)
 
@@ -588,9 +634,9 @@ class NfvManager(AbstractManager):
             vnfd_ids.append(vnfd.get('id'))
 
         try:
-            self.try_delete_nsr(nsr, ob_client)
+            try_delete_nsr(nsr, ob_client)
 
-            self.try_delete_nsd(nsd_id, ob_client)
+            try_delete_nsd(nsd_id, ob_client)
             # TODO to be added if cascade is not enabled
             # for vnfd_id in vnfd_ids:
             #     self.try_delete_vnfd(vnfd_id, ob_client)
@@ -601,34 +647,12 @@ class NfvManager(AbstractManager):
         remove_nsr_to_check(nsr.get('id'))
         logger.info("Removed resource %s" % nsr.get('name'))
 
-    def try_delete_nsr(self, nsr, ob_client):
-        try:
-            ob_client.delete_nsr(nsr.get('id'))
-        except:
-            raise NfvResourceDeleteException('Not able to delete NSR with id: %s' % nsr.get('id'))
-        timer = 500
-        time.sleep(5)
-        while True:
-            try:
-                nsr = json.loads(ob_client.get_nsr(nsr.get('id')))
-                if timer == 0:
-                    raise NfvResourceDeleteException('Not able to delete NSR with id: %s' % nsr.get('id'))
-            except NfvoException:
-                return
-            timer -= 1
-            time.sleep(2)
-
-    def try_delete_nsd(self, nsd_id, ob_client):
-        try:
-            ob_client.delete_nsd(nsd_id)
-        except:
-            raise NfvResourceDeleteException('Not able to delete NSD with id: %s' % nsd_id)
-
-    def try_delete_vnfd(self, vnfd_id, ob_client):
-        try:
-            ob_client.delete_vnfd(vnfd_id)
-        except:
-            raise NfvResourceDeleteException('Not able to delete VNFD with id: %s' % vnfd_id)
+        if get_config('system', 'delete-all', 'false').lower() == 'true':
+            logger.debug("removing everything!")
+            for _nsr in ob_client.list_nsrs():
+                ob_client.delete_nsr(_nsr.get('id'))
+            for _nsd in ob_client.list_nsds():
+                ob_client.delete_nsd(_nsd.get('id'))
 
     def _update_status(self) -> dict:
         result = {}
