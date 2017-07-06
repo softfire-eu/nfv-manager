@@ -315,6 +315,15 @@ def try_delete_nsr(nsr, ob_client):
         time.sleep(2)
 
 
+def remove_all(ob_client, force=False):
+    if force or get_config('system', 'delete-all', 'false').lower() == 'true':
+        logger.debug("removing everything!")
+        for _nsr in ob_client.list_nsrs():
+            ob_client.delete_nsr(_nsr.get('id'))
+        for _nsd in ob_client.list_nsds():
+            ob_client.delete_nsd(_nsd.get('id'))
+
+
 class NfvManager(AbstractManager):
     def __init__(self, config_file_path):
         super().__init__(config_file_path)
@@ -647,12 +656,7 @@ class NfvManager(AbstractManager):
         remove_nsr_to_check(nsr.get('id'))
         logger.info("Removed resource %s" % nsr.get('name'))
 
-        if get_config('system', 'delete-all', 'false').lower() == 'true':
-            logger.debug("removing everything!")
-            for _nsr in ob_client.list_nsrs():
-                ob_client.delete_nsr(_nsr.get('id'))
-            for _nsd in ob_client.list_nsds():
-                ob_client.delete_nsd(_nsd.get('id'))
+        remove_all(ob_client)
 
     def _update_status(self) -> dict:
         result = {}
@@ -678,5 +682,6 @@ class NfvManager(AbstractManager):
         username = user_info.name
         os_utils.delete_tenant_and_user(username=username, testbed_tenants=user_info.testbed_tenants)
         ob_client = OBClient(username)
+        remove_all(ob_client, True)
         ob_client.delete_user(username=username)
         ob_client.delete_project(ob_project_id=user_info.ob_project_id)
