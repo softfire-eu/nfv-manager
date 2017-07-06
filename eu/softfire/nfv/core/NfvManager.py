@@ -444,7 +444,7 @@ class NfvManager(AbstractManager):
         vnfds = []
         testbeds = resource_dict.get("properties").get("testbeds")
 
-        if os.path.exists(temp_csar_location) and nsd_chosen:
+        if not os.path.exists(temp_csar_location) and nsd_chosen:
             for package in [f for f in listdir(temp_csar_location) if isfile(join(temp_csar_location, f))]:
                 vnfd = ob_client.upload_package(join(temp_csar_location, package), package.split('.')[0])
                 vnfds.append({
