@@ -435,18 +435,19 @@ class NfvManager(AbstractManager):
             ob_client.import_key(ssh_pub_key, nsd_name)
             nsr_keys_to_use.append(nsd_name)
 
-        temp_csar_location = "{}/{}".format(
-            self.get_config_value("system", "temp-csar-location", '/etc/softfire/experiment-nsd-csar').rstrip('/'),
-            resource_id)
+        # temp_csar_location = "{}/{}".format(
+        #     self.get_config_value("system", "temp-csar-location", '/etc/softfire/experiment-nsd-csar').rstrip('/'),
+        #     resource_id)
         available_nsds = get_available_nsds()
         nsd_chosen = available_nsds.get(resource_id)
-
+        packages_location = "%s/%s" % (
+        self.get_config_value("system", "packages-location", '/etc/softfire/packages').rstrip('/'), nsd_chosen)
         vnfds = []
         testbeds = resource_dict.get("properties").get("testbeds")
 
-        if not os.path.exists(temp_csar_location) and nsd_chosen:
-            for package in [f for f in listdir(temp_csar_location) if isfile(join(temp_csar_location, f))]:
-                vnfd = ob_client.upload_package(join(temp_csar_location, package), package.split('.')[0])
+        if nsd_chosen and os.path.exists(packages_location):
+            for package in [f for f in listdir(packages_location) if isfile(join(packages_location, f))]:
+                vnfd = ob_client.upload_package(join(packages_location, package), package.split('.')[0])
                 vnfds.append({
                     'id': vnfd.get('id')
                 })
