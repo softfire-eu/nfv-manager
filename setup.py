@@ -27,7 +27,7 @@ setup(
     install_requires=[
         'asyncio',
         'grpcio',
-        'openbaton-cli==3.2.6',
+        'openbaton-cli==3.2.8',
         'python-keystoneclient',
         'python-neutronclient',
         'python-glanceclient',
