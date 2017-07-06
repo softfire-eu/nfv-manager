@@ -441,7 +441,7 @@ class NfvManager(AbstractManager):
         available_nsds = get_available_nsds()
         nsd_chosen = available_nsds.get(resource_id)
         packages_location = "%s/%s" % (
-        self.get_config_value("system", "packages-location", '/etc/softfire/packages').rstrip('/'), nsd_chosen)
+            self.get_config_value("system", "packages-location", '/etc/softfire/packages').rstrip('/'), resource_id)
         vnfds = []
         testbeds = resource_dict.get("properties").get("testbeds")
 
