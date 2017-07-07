@@ -49,7 +49,7 @@ class UpdateStatusThread(Thread):
                 except Exception as e:
                     traceback.print_exc()
                     if hasattr(e, 'args'):
-                        logger.error("got error while updating resources: %s " % e.args)
+                        logger.error("got error while updating resources: %s " % e)
                     else:
                         logger.error("got unknown error while updating resources")
 
@@ -316,7 +316,7 @@ def try_delete_nsr(nsr, ob_client):
 
 
 def remove_all(ob_client, force=False):
-    if force or get_config('system', 'delete-all', 'false').lower() == 'true':
+    if force or get_config('system', 'delete-all', CONFIG_FILE_PATH, 'false').lower() == 'true':
         logger.debug("removing everything!")
         for _nsr in ob_client.list_nsrs():
             ob_client.delete_nsr(_nsr.get('id'))
@@ -632,6 +632,7 @@ class NfvManager(AbstractManager):
         except:
             logger.error('Could not parse release resource payload to JSON: {}'.format(payload))
             traceback.print_exc()
+            remove_nsr_to_check(nsr.get('id'), True)
             return
         nsd_id = nsr.get('descriptor_reference')
         try:
