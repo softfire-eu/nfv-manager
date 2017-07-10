@@ -135,9 +135,9 @@ def try_delete_nsr(nsr, ob_client):
 def remove_all(ob_client, force=False):
     if force or get_config('system', 'delete-all', CONFIG_FILE_PATH, 'false').lower() == 'true':
         logger.debug("removing everything!")
-        for _nsr in json.loads(ob_client.list_nsrs()):
+        for _nsr in ob_client.list_nsrs():
             ob_client.delete_nsr(_nsr.get('id'))
-        for _nsd in json.loads(ob_client.list_nsds()):
+        for _nsd in ob_client.list_nsds():
             ob_client.delete_nsd(_nsd.get('id'))
 
 

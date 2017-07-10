@@ -45,7 +45,7 @@ class OBClient(object):
         return None
 
     def list_nsds(self):
-        return self.agent_factory.get_ns_descriptor_agent(self.project_id).find()
+        return json.loads(self.agent_factory.get_ns_descriptor_agent(self.project_id).find())
 
     def create_nsr(self, nsd_id, body=None):
         return self.agent_factory.get_ns_records_agent(self.project_id).create(nsd_id, body)
