@@ -139,6 +139,8 @@ def remove_all(ob_client, force=False):
             ob_client.delete_nsr(_nsr.get('id'))
         for _nsd in ob_client.list_nsds():
             ob_client.delete_nsd(_nsd.get('id'))
+        for _vim_instance in ob_client.list_vim_instances():
+            ob_client.delete_vim_instance(_vim_instance.get('id'))
 
 
 class NfvManager(AbstractManager):

@@ -191,3 +191,6 @@ class OBClient(object):
 
     def list_nsrs(self):
         return json.loads(self.agent_factory.get_ns_records_agent(self.project_id).find())
+
+    def delete_vim_instance(self, _vim_id):
+        self.agent_factory.get_vim_instance_agent(self.project_id).delete(_vim_id)
