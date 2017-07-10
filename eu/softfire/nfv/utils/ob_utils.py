@@ -74,7 +74,7 @@ class OBClient(object):
         return self.agent_factory.get_user_agent(self.project_id).create(user)
 
     def create_vim_instance(self, vim_instance):
-        for vi in json.loads(self.list_vim_instances()):
+        for vi in self.list_vim_instances():
             if vi.get('name') == vim_instance.get('name'):
                 return vi
         if isinstance(vim_instance, dict):
