@@ -90,7 +90,7 @@ class OBClient(object):
         return self.agent_factory.get_project_agent().find()
 
     def list_vim_instances(self):
-        return self.agent_factory.get_vim_instance_agent(self.project_id).find()
+        return json.loads(self.agent_factory.get_vim_instance_agent(self.project_id).find())
 
     def list_images_network_flavors(self):
         images = []
