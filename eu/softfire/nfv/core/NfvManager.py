@@ -446,12 +446,14 @@ class NfvManager(AbstractManager):
 
         logger.info("Deleting resources for user: %s" % user_info.name)
         logger.debug("Received this payload: %s" % payload)
+        nsr = None
         try:
             nsr = json.loads(payload)
         except:
             logger.error('Could not parse release resource payload to JSON: {}'.format(payload))
             traceback.print_exc()
-            remove_nsr_to_check(nsr.get('id'), True)
+            if nsr:
+                remove_nsr_to_check(nsr.get('id'), True)
             return
         nsd_id = nsr.get('descriptor_reference')
         try:
