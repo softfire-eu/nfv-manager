@@ -469,7 +469,7 @@ def create_os_project(username, password, tenant_name, testbed_name=None):
 
 def _create_single_project(tenant_name, testbed, testbed_name, username, password):
     os_client = OSClient(testbed_name, testbed)
-    logger.info("Created OSClient")
+    logger.info("Created OSClient for testbed %s" % testbed_name)
     admin_user = os_client.get_user()
 
     logger.debug("Got User %s" % admin_user)
