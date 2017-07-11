@@ -6,6 +6,7 @@ import neutronclient
 from glanceclient import Client as Glance
 from keystoneauth1 import session
 from keystoneauth1.identity import v2, v3
+from keystoneauth1.exceptions.http import Conflict
 from neutronclient.common.exceptions import IpAddressGenerationFailureClient
 from neutronclient.v2_0.client import Client as Neutron
 from novaclient.client import Client as Nova
@@ -154,7 +155,12 @@ class OSClient(object):
 
     def add_user_role(self, user, role, tenant):
         if self.api_version == 2:
-            return self.keystone.roles.add_user_role(user=user, role=role, tenant=tenant)
+            try:
+                return self.keystone.roles.add_user_role(user=user, role=role, tenant=tenant)
+            except Conflict as c:
+                if c.http_status == 409:  # role already assigned to user
+                    return
+                raise c
         else:
             return self.keystone.roles.grant(user=user, role=role, project=tenant)
 
@@ -506,7 +512,7 @@ def _create_single_project(tenant_name, testbed, testbed_name, username, passwor
     os_client.add_user_role(user=admin_user, role=admin_role, tenant=os_tenant_id)
     os_client.add_user_role(user=exp_user, role=user_role, tenant=os_tenant_id)
 
-    os_client = OSClient(testbed_name, testbed, project_id=os_tenant_id)
+    os_client = OSClient(testbed_name, testbed, project_id=os_tenant_id, tenant_name=tenant_name)
 
     try:
         ext_net = os_client.get_ext_net(testbed.get('ext_net_name'))
