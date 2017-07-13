@@ -305,6 +305,7 @@ class NfvManager(AbstractManager):
                 "keys": nsr_keys_to_use,
                 "monitoringIp": monitoring_ip
             })
+            logger.debug("Body is %s" % body)
             nsr = ob_client.create_nsr(nsd.get('id'), body=body)
             add_nsr_to_check(user_info.name, nsr)
 
