@@ -160,7 +160,10 @@ class NfvManager(AbstractManager):
             temp_csar_location = self.get_config_value('system', 'temp-csar-location',
                                                        '/etc/softfire/experiment-nsd-csar').rstrip('/')
             nsd_location = '{}/{}/{}.csar'.format(temp_csar_location, user_info.name, resource_id)
-            if not (os.path.exists(nsd_location) or request_dict.get("properties").get('file_name')):
+            file_name = request_dict.get("properties").get('file_name')
+            logger.debug("Checking if nsd_location exists: %s and if there is filename: %s" % (
+                os.path.exists(nsd_location), file_name))
+            if not os.path.exists(nsd_location) and not file_name:
                 raise NfvResourceValidationError(
                     message="Resource id %s not in the available ones %s and no CSAR file provided" % (
                         resource_id, list(available_nsds.keys())))
