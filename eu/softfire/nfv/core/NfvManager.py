@@ -267,7 +267,7 @@ class NfvManager(AbstractManager):
         vnfds = []
         testbeds = resource_dict.get("properties").get("testbeds")
 
-        logger.debug("Checking if nsd_chosen is not none: $s" % nsd_chosen)
+        logger.debug("Checking if nsd_chosen is not none: %s" % nsd_chosen)
         logger.debug("and if path %s exists: %s" % (packages_location, os.path.exists(packages_location)))
 
         if nsd_chosen and os.path.exists(packages_location):
