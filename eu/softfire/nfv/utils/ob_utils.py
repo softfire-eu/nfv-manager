@@ -10,6 +10,25 @@ from eu.softfire.nfv.utils.utils import get_logger
 logger = get_logger(__name__)
 
 
+def get_vim_instance_test():
+    return {
+        "name":           "vim-instance-test",
+        "authUrl":        'http://test.test.ts',
+        "tenant":         'test',
+        "username":       'test',
+        "password":       'test',
+        "securityGroups": [
+            'default'
+        ],
+        "type":           "test",
+        "location":       {
+            "name":      "Test of nowhere",
+            "latitude":  "5.525876",
+            "longitude": "31.314400"
+        }
+    }
+
+
 class OBClient(object):
     def __init__(self, project_name=None):
         """
