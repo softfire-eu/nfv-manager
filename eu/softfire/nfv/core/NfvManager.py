@@ -94,9 +94,25 @@ def remove_nsr_to_check(nsr_id):
 def _update_nsr(nsr):
     logger.debug("Checking resources of user %s, nsr id %s" % (nsr.username, nsr.id))
     ob_client = OBClient(nsr.username)
-    nsr_new = ob_client.get_nsr(nsr.id)
-    add_nsr_to_check(nsr.username, json.loads(nsr_new))
-    logger.debug("Status is: %s" % json.loads(nsr_new).get('status'))
+    # check if the OBClient has a project ID. if not, something went wrong and the nsr is ignored for now.
+    if ob_client.project_id is None:
+        logger.error('The OBClient for user {} has no project ID. This should never happen. Does the user still exist in Open Baton?'.format(nsr.username))
+        return None
+    try:
+        nsr_new = ob_client.get_nsr(nsr.id)
+    except Exception as e:
+        logger.error('Exception while fetching the NSR with ID {} of user {}. Does it really exist?'.format(nsr.id, nsr.username))
+        return None
+    try:
+        nsr_new_dict = json.loads(nsr_new)
+    except:
+        logger.error('Not able to parse nsr to dictionary: {}'.format(nsr_new))
+        return None
+    if 'error' in nsr_new_dict:
+        logger.error('Exception while updating the NSR with ID {} of user {}: {}'.format(nsr.id, nsr.username, nsr_new_dict.get('error')))
+        return None
+    add_nsr_to_check(nsr.username, nsr_new_dict)
+    logger.debug("Status is: %s" % nsr_new_dict.get('status'))
     return nsr_new
 
 
@@ -497,13 +513,15 @@ class NfvManager(AbstractManager):
                         result[nsr.username] = []
                     if nsr.status.lower() not in ['active', 'error']:
                         nsr_new = _update_nsr(nsr)
-                        result[nsr.username].append(nsr_new)
+                        if nsr_new is not None:
+                            result[nsr.username].append(nsr_new)
             else:
                 if not result.get(nsrs.username):
                     result[nsrs.username] = []
                 if nsrs.status.lower() not in ['active', 'error']:
                     nsr_new = _update_nsr(nsrs)
-                    result[nsrs.username].append(nsr_new)
+                    if nsr_new is not None:
+                        result[nsrs.username].append(nsr_new)
 
         return result
 

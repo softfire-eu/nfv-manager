@@ -35,7 +35,8 @@ class OBClient(object):
                                                    project_id=None)
         if project_name:
             self.project_id = self._get_project_id(project_name)
-            # self.agent._client.project_id = self.project_id
+            if self.project_id is None and project_name is not None:
+                logger.warning('Project ID is None. No project found with the name {}'.format(project_name))
 
     def _get_project_id(self, project_name):
         project_agent = self.agent_factory.get_project_agent()
