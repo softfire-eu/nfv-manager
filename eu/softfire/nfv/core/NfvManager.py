@@ -478,6 +478,9 @@ class NfvManager(AbstractManager):
             if nsr:
                 remove_nsr_to_check(nsr.get('id'), True)
             return
+        if nsr.get('type') == 'NfvResource' and nsr.get('properties') is not None:
+            logger.debug('The payload does not seem to be an NSR so the resource was probably not yet deployed and nothing has to be removed from Open Baton.')
+            return
         nsd_id = nsr.get('descriptor_reference')
         try:
             nsd = json.loads(ob_client.get_nsd(nsd_id))
@@ -502,7 +505,7 @@ class NfvManager(AbstractManager):
         remove_nsr_to_check(nsr.get('id'))
         logger.info("Removed resource %s" % nsr.get('name'))
 
-        remove_all(ob_client)
+        # remove_all(ob_client)
 
     def _update_status(self) -> dict:
         result = {}
