@@ -322,7 +322,17 @@ class NfvManager(AbstractManager):
                 "monitoringIp": monitoring_ip
             })
             logger.debug("Body is %s" % body)
-            nsr = ob_client.create_nsr(nsd.get('id'), body=body)
+            try:
+                nsr = ob_client.create_nsr(nsd.get('id'), body=body)
+            except Exception as e:
+                logger.error('Exception while deploying NSR from NSD: {}'.format(e))
+                logger.debug('Delete NSD {}'.format(nsd.get('id')))
+                try:
+                    ob_client.delete_nsd(nsd.get('id'))
+                except Exception as e2:
+                    logger.error('Could not remove NSD {}: {}'.format(nsd.get('id'), e2))
+                raise e
+
             add_nsr_to_check(user_info.name, nsr)
 
         else:
@@ -355,8 +365,19 @@ class NfvManager(AbstractManager):
             logger.debug("Deploy NSR with body: %s" % body)
 
             if nsd:
-                nsr = ob_client.create_nsr(nsd.get('id'), body)
+                try:
+                    nsr = ob_client.create_nsr(nsd.get('id'), body=body)
+                except Exception as e:
+                    logger.error('Exception while deploying NSR from NSD {}: {}'.format(nsd.get('id'), e))
+                    logger.debug('Delete NSD {}'.format(nsd.get('id')))
+                    try:
+                        ob_client.delete_nsd(nsd.get('id'))
+                    except Exception as e2:
+                        logger.error('Could not remove NSD {}: {}'.format(nsd.get('id'), e2))
+                    raise e
                 add_nsr_to_check(user_info.name, nsr)
+
+
 
         if isinstance(nsr, dict):
             nsr = json.dumps(nsr)
@@ -473,7 +494,7 @@ class NfvManager(AbstractManager):
         try:
             nsr = json.loads(payload)
         except:
-            logger.error('Could not parse release resource payload to JSON: {}'.format(payload))
+            logger.warning('Could not parse release resource payload to JSON: {}'.format(payload))
             traceback.print_exc()
             if nsr:
                 remove_nsr_to_check(nsr.get('id'), True)
