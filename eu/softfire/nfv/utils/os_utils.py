@@ -386,7 +386,35 @@ class OSClient(object):
             if not project_id:
                 raise OpenstackClientError("Missing project_id!")
             self.set_neutron(project_id)
-        return self.neutron.list_networks()
+        return self.neutron.list_networks(tenant_id=project_id)
+
+    def list_subnets(self, project_id):
+        if not self.neutron:
+            if not project_id:
+                raise OpenstackClientError("Missing project_id!")
+            self.set_neutron(project_id)
+        return self.neutron.list_subnets(tenant_id=project_id)
+
+    def list_floatingips(self, project_id):
+        if not self.neutron:
+            if not project_id:
+                raise OpenstackClientError("Missing project_id!")
+            self.set_neutron(project_id)
+        return self.neutron.list_floatingips(tenant_id=project_id)
+
+    def list_routers(self, project_id):
+        if not self.neutron:
+            if not project_id:
+                raise OpenstackClientError("Missing project_id!")
+            self.set_neutron(project_id)
+        return self.neutron.list_routers(tenant_id=project_id)
+
+    def list_ports(self, project_id):
+        if not self.neutron:
+            if not project_id:
+                raise OpenstackClientError("Missing project_id!")
+            self.set_neutron(project_id)
+        return self.neutron.list_ports(tenant_id=project_id)
 
     def list_keypairs(self, os_project_id=None):
         if not self.nova:
@@ -420,6 +448,59 @@ class OSClient(object):
         except:
             traceback.print_exc()
             logger.error("Not Able to delete project %s" % project_id)
+
+    def release_floating_ips(self, project_id):
+        fips = self.list_floatingips(project_id).get('floatingips')
+        for fip in fips:
+            self.neutron.delete_floatingip(fip.get('id'))
+
+    def delete_ports(self, project_id):
+        ports = self.list_ports(project_id).get('ports')
+        for port in ports:
+            try:
+                self.neutron.delete_port(port.get('id'))
+            except Exception as e:
+                pass
+
+    def remove_gateway_routers(self, project_id):
+        routers = self.list_routers(project_id).get('routers')
+        for router in routers:
+            self.neutron.remove_gateway_router(router.get('id'))
+
+    def remove_interface_routers(self, project_id):
+        routers = self.list_routers(project_id).get('routers')
+        subnets = self.list_subnets(project_id).get('subnets')
+        for router in routers:
+            for subnet in subnets:
+                body_value = {
+                    'subnet_id': subnet.get('id'),
+                }
+                try:
+                    self.neutron.remove_interface_router(router.get('id'), body_value)
+                    break
+                except Exception as e:
+                    pass
+            else:
+                logger.warn('No subnet found that is associated to router {}'.format(router.get('id')))
+
+    def delete_routers(self, project_id):
+        routers = self.list_routers(project_id).get('routers')
+        for router in routers:
+            self.neutron.delete_router(router.get('id'))
+
+
+
+    def delete_networks(self, project_id):
+        networks = self.list_networks(project_id).get('networks')
+        for nw in networks:
+            self.neutron.delete_network(nw.get('id'))
+
+    def delete_security_groups(self, project_id):
+        sec_groups = self.list_sec_group(project_id)
+        for sec_group in sec_groups:
+            self.neutron.delete_security_group(sec_group.get('id'))
+
+
 
 
 def _list_images_single_tenant(tenant_name, testbed, testbed_name):
@@ -555,6 +636,13 @@ def delete_tenant_and_user(username, testbed_tenants):
         for testbed_name, credentials in openstack_credentials.items():
             if get_testbed_name_from_id(testbed_id) == testbed_name:
                 os_client = OSClient(testbed_name, credentials)
+                os_client.delete_security_groups(project_id)
+                os_client.release_floating_ips(project_id)
+                os_client.remove_gateway_routers(project_id)
+                os_client.remove_interface_routers(project_id)
+                os_client.delete_ports(project_id)
+                os_client.delete_routers(project_id)
+                os_client.delete_networks(project_id)
                 os_client.delete_user(username)
                 os_client.delete_project(project_id)
 

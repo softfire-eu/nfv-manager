@@ -94,9 +94,25 @@ def remove_nsr_to_check(nsr_id):
 def _update_nsr(nsr):
     logger.debug("Checking resources of user %s, nsr id %s" % (nsr.username, nsr.id))
     ob_client = OBClient(nsr.username)
-    nsr_new = ob_client.get_nsr(nsr.id)
-    add_nsr_to_check(nsr.username, json.loads(nsr_new))
-    logger.debug("Status is: %s" % json.loads(nsr_new).get('status'))
+    # check if the OBClient has a project ID. if not, something went wrong and the nsr is ignored for now.
+    if ob_client.project_id is None:
+        logger.error('The OBClient for user {} has no project ID. This should never happen. Does the user still exist in Open Baton?'.format(nsr.username))
+        return None
+    try:
+        nsr_new = ob_client.get_nsr(nsr.id)
+    except Exception as e:
+        logger.error('Exception while fetching the NSR with ID {} of user {}. Does it really exist?'.format(nsr.id, nsr.username))
+        return None
+    try:
+        nsr_new_dict = json.loads(nsr_new)
+    except:
+        logger.error('Not able to parse nsr to dictionary: {}'.format(nsr_new))
+        return None
+    if 'error' in nsr_new_dict:
+        logger.error('Exception while updating the NSR with ID {} of user {}: {}'.format(nsr.id, nsr.username, nsr_new_dict.get('error')))
+        return None
+    add_nsr_to_check(nsr.username, nsr_new_dict)
+    logger.debug("Status is: %s" % nsr_new_dict.get('status'))
     return nsr_new
 
 
@@ -298,7 +314,7 @@ class NfvManager(AbstractManager):
                     vdu_vim_instances[vdu_name] = ["vim-instance-%s" % vim_name for vim_name in testbeds.values()]
             else:
                 for vdu_name in nsd_chosen.get("vnf_types"):
-                    vdu_vim_instances[vdu_name] = [testbeds.get(vdu_name)]
+                    vdu_vim_instances[vdu_name] = ["vim-instance-%s" % testbeds.get(vdu_name)]
 
             body = json.dumps({
                 "vduVimInstances": vdu_vim_instances,
@@ -306,7 +322,17 @@ class NfvManager(AbstractManager):
                 "monitoringIp": monitoring_ip
             })
             logger.debug("Body is %s" % body)
-            nsr = ob_client.create_nsr(nsd.get('id'), body=body)
+            try:
+                nsr = ob_client.create_nsr(nsd.get('id'), body=body)
+            except Exception as e:
+                logger.error('Exception while deploying NSR from NSD: {}'.format(e))
+                logger.debug('Delete NSD {}'.format(nsd.get('id')))
+                try:
+                    ob_client.delete_nsd(nsd.get('id'))
+                except Exception as e2:
+                    logger.error('Could not remove NSD {}: {}'.format(nsd.get('id'), e2))
+                raise e
+
             add_nsr_to_check(user_info.name, nsr)
 
         else:
@@ -339,8 +365,19 @@ class NfvManager(AbstractManager):
             logger.debug("Deploy NSR with body: %s" % body)
 
             if nsd:
-                nsr = ob_client.create_nsr(nsd.get('id'), body)
+                try:
+                    nsr = ob_client.create_nsr(nsd.get('id'), body=body)
+                except Exception as e:
+                    logger.error('Exception while deploying NSR from NSD {}: {}'.format(nsd.get('id'), e))
+                    logger.debug('Delete NSD {}'.format(nsd.get('id')))
+                    try:
+                        ob_client.delete_nsd(nsd.get('id'))
+                    except Exception as e2:
+                        logger.error('Could not remove NSD {}: {}'.format(nsd.get('id'), e2))
+                    raise e
                 add_nsr_to_check(user_info.name, nsr)
+
+
 
         if isinstance(nsr, dict):
             nsr = json.dumps(nsr)
@@ -457,10 +494,13 @@ class NfvManager(AbstractManager):
         try:
             nsr = json.loads(payload)
         except:
-            logger.error('Could not parse release resource payload to JSON: {}'.format(payload))
+            logger.warning('Could not parse release resource payload to JSON: {}'.format(payload))
             traceback.print_exc()
             if nsr:
                 remove_nsr_to_check(nsr.get('id'), True)
+            return
+        if nsr.get('type') == 'NfvResource' and nsr.get('properties') is not None:
+            logger.debug('The payload does not seem to be an NSR so the resource was probably not yet deployed and nothing has to be removed from Open Baton.')
             return
         nsd_id = nsr.get('descriptor_reference')
         try:
@@ -486,7 +526,7 @@ class NfvManager(AbstractManager):
         remove_nsr_to_check(nsr.get('id'))
         logger.info("Removed resource %s" % nsr.get('name'))
 
-        remove_all(ob_client)
+        # remove_all(ob_client)
 
     def _update_status(self) -> dict:
         result = {}
@@ -497,13 +537,15 @@ class NfvManager(AbstractManager):
                         result[nsr.username] = []
                     if nsr.status.lower() not in ['active', 'error']:
                         nsr_new = _update_nsr(nsr)
-                        result[nsr.username].append(nsr_new)
+                        if nsr_new is not None:
+                            result[nsr.username].append(nsr_new)
             else:
                 if not result.get(nsrs.username):
                     result[nsrs.username] = []
                 if nsrs.status.lower() not in ['active', 'error']:
                     nsr_new = _update_nsr(nsrs)
-                    result[nsrs.username].append(nsr_new)
+                    if nsr_new is not None:
+                        result[nsrs.username].append(nsr_new)
 
         return result
 
