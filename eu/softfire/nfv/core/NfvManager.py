@@ -163,7 +163,7 @@ class NfvManager(AbstractManager):
     def __init__(self, config_file_path):
         super().__init__(config_file_path)
         with open(self.get_config_value('system', 'softfire-public-key'), "r") as sosftfire_ssh_pub_key:
-            self.softfire_pub_key = sosftfire_ssh_pub_key.read()
+            self.softfire_pub_key = sosftfire_ssh_pub_key.read().strip()
 
     def validate_resources(self, user_info=None, payload=None) -> None:
 
@@ -270,7 +270,7 @@ class NfvManager(AbstractManager):
         nsr_keys_to_use = ['softfire-key']
         if ssh_pub_key:
             logger.debug("creating user-key called: %s" % nsd_name)
-            ob_client.import_key(ssh_pub_key, nsd_name)
+            ob_client.import_key(ssh_pub_key.strip(), nsd_name)
             nsr_keys_to_use.append(nsd_name)
 
         # temp_csar_location = "{}/{}".format(
