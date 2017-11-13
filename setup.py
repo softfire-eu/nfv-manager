@@ -15,7 +15,7 @@ def read(fname):
 
 setup(
     name="nfv-manager",
-    version="1.1.6",
+    version="1.1.7",
     author="SoftFIRE",
     author_email="softfire@softfire.eu",
     description="The SoftFIRE NFV Manager",
