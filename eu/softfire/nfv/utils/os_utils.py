@@ -5,8 +5,8 @@ import keystoneclient
 import neutronclient
 from glanceclient import Client as Glance
 from keystoneauth1 import session
-from keystoneauth1.identity import v2, v3
 from keystoneauth1.exceptions.http import Conflict
+from keystoneauth1.identity import v2, v3
 from neutronclient.common.exceptions import IpAddressGenerationFailureClient
 from neutronclient.v2_0.client import Client as Neutron
 from novaclient.client import Client as Nova
@@ -151,7 +151,7 @@ class OSClient(object):
             return self.keystone.tenants.create(tenant_name=tenant_name, description=description)
         else:
             return self.keystone.projects.create(name=tenant_name, description=description,
-                                                 domain=self.user_domain_name.lower())
+                                                 domain=self.user_domain_name)
 
     def add_user_role(self, user, role, tenant):
         if self.api_version == 2:
