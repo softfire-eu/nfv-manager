@@ -378,7 +378,6 @@ class NfvManager(AbstractManager):
                 add_nsr_to_check(user_info.name, nsr)
 
 
-
         if isinstance(nsr, dict):
             nsr = json.dumps(nsr)
 
@@ -499,10 +498,14 @@ class NfvManager(AbstractManager):
             if nsr:
                 remove_nsr_to_check(nsr.get('id'), True)
             return
-        if nsr.get('type') == 'NfvResource' and nsr.get('properties') is not None:
-            logger.debug('The payload does not seem to be an NSR so the resource was probably not yet deployed and nothing has to be removed from Open Baton.')
+        try:
+            if nsr.get('type') == 'NfvResource' and nsr.get('properties') is not None:
+                logger.debug('The payload does not seem to be an NSR so the resource was probably not yet deployed and nothing has to be removed from Open Baton.')
+                return
+            nsd_id = nsr.get('descriptor_reference')
+        except:
+            logger.error("Payload is not a NSR.")
             return
-        nsd_id = nsr.get('descriptor_reference')
         try:
             nsd = json.loads(ob_client.get_nsd(nsd_id))
         except NfvoException:
