@@ -27,7 +27,7 @@ class OSClient(object):
         self.project_id = None
         self.testbed = testbed
         self.project_domain_name = self.testbed.get('project_domain_name') or 'Default'
-        self.user_domain_name = self.testbed.get('user_domain_name') or 'Default'
+        self.user_domain_id = self.testbed.get('user_domain_id') or 'Default'
         self.api_version = self.testbed.get('api_version')
         self.username = self.testbed.get('username')
         self.password = self.testbed.get('password')
@@ -108,7 +108,7 @@ class OSClient(object):
                                password=self.password,
                                project_id=p_id,
                                project_domain_name=self.project_domain_name,
-                               user_domain_id=self.user_domain_name)
+                               user_domain_id=self.user_domain_id)
         else:
             msg = "Wrong api version: %s" % self.api_version
             logger.error(msg)
@@ -151,7 +151,7 @@ class OSClient(object):
             return self.keystone.tenants.create(tenant_name=tenant_name, description=description)
         else:
             return self.keystone.projects.create(name=tenant_name, description=description,
-                                                 domain=self.user_domain_name)
+                                                 domain=self.user_domain_id)
 
     def add_user_role(self, user, role, tenant):
         if self.api_version == 2:
