@@ -406,9 +406,9 @@ class NfvManager(AbstractManager):
         user = {
             'username': username,
             'password': password,
-            'enabled': True,
-            'email': None,
-            'roles': [
+            'enabled':  True,
+            'email':    "%s@softfire.local",
+            'roles':    [
                 {
                     'role': 'USER',
                     'project': project.get('name')
