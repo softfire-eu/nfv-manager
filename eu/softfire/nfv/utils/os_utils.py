@@ -108,7 +108,7 @@ class OSClient(object):
                                password=self.password,
                                project_id=p_id,
                                project_domain_name=self.project_domain_name,
-                               user_domain_name=self.user_domain_name)
+                               user_domain_id=self.user_domain_name)
         else:
             msg = "Wrong api version: %s" % self.api_version
             logger.error(msg)
