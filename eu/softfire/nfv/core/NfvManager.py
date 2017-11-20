@@ -407,7 +407,7 @@ class NfvManager(AbstractManager):
             'username': username,
             'password': password,
             'enabled':  True,
-            'email':    "%s@softfire.local",
+            'email':    "{}@softfire.local".format(username),
             'roles':    [
                 {
                     'role': 'USER',
