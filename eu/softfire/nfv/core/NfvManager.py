@@ -535,14 +535,14 @@ class NfvManager(AbstractManager):
                 for nsr in nsrs:
                     if not result.get(nsr.username):
                         result[nsr.username] = []
-                    if nsr.status.lower() not in ['active', 'error']:
+                    if nsr.status.lower() not in ['active']:
                         nsr_new = _update_nsr(nsr)
                         if nsr_new is not None:
                             result[nsr.username].append(nsr_new)
             else:
                 if not result.get(nsrs.username):
                     result[nsrs.username] = []
-                if nsrs.status.lower() not in ['active', 'error']:
+                if nsrs.status.lower() not in ['active']:
                     nsr_new = _update_nsr(nsrs)
                     if nsr_new is not None:
                         result[nsrs.username].append(nsr_new)
