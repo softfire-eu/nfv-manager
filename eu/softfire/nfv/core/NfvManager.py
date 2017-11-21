@@ -541,7 +541,7 @@ class NfvManager(AbstractManager):
                         try:
                             nsr_new = _update_nsr(nsr)
                         except NfvManagerNotFoundException:
-                            remove_nsr_to_check(nsr.get('id'))
+                            remove_nsr_to_check(nsr.id)
                             continue
                         if nsr_new is not None:
                             result[nsr.username].append(nsr_new)
@@ -552,7 +552,7 @@ class NfvManager(AbstractManager):
                     try:
                         nsr_new = _update_nsr(nsrs)
                     except NfvManagerNotFoundException:
-                        remove_nsr_to_check(nsrs.get('id'))
+                        remove_nsr_to_check(nsrs.id)
                         continue
                     if nsr_new is not None:
                         result[nsrs.username].append(nsr_new)
