@@ -19,7 +19,7 @@ from eu.softfire.nfv.db.entities import Nsr
 from eu.softfire.nfv.db.repositories import find, delete, save
 from eu.softfire.nfv.utils import os_utils
 from eu.softfire.nfv.utils.exceptions import NfvResourceValidationError, NfvResourceDeleteException, \
-    MissingFileException
+    MissingFileException, NfvManagerNotFoundException
 from eu.softfire.nfv.utils.ob_utils import OBClient
 from eu.softfire.nfv.utils.os_utils import create_os_project
 from eu.softfire.nfv.utils.static_config import CONFIG_FILE_PATH
@@ -97,7 +97,9 @@ def _update_nsr(nsr):
     # check if the OBClient has a project ID. if not, something went wrong and the nsr is ignored for now.
     if ob_client.project_id is None:
         logger.error('The OBClient for user {} has no project ID. This should never happen. Does the user still exist in Open Baton?'.format(nsr.username))
-        return None
+        raise NfvManagerNotFoundException(
+            'The OBClient for user {} has no project ID. This should never happen. Does the user still exist in Open Baton?'.format(
+                nsr.username))
     try:
         nsr_new = ob_client.get_nsr(nsr.id)
     except Exception as e:
@@ -536,14 +538,22 @@ class NfvManager(AbstractManager):
                     if not result.get(nsr.username):
                         result[nsr.username] = []
                     if nsr.status.lower() not in ['active']:
-                        nsr_new = _update_nsr(nsr)
+                        try:
+                            nsr_new = _update_nsr(nsr)
+                        except NfvManagerNotFoundException:
+                            remove_nsr_to_check(nsr.get('id'))
+                            continue
                         if nsr_new is not None:
                             result[nsr.username].append(nsr_new)
             else:
                 if not result.get(nsrs.username):
                     result[nsrs.username] = []
                 if nsrs.status.lower() not in ['active']:
-                    nsr_new = _update_nsr(nsrs)
+                    try:
+                        nsr_new = _update_nsr(nsrs)
+                    except NfvManagerNotFoundException:
+                        remove_nsr_to_check(nsrs.get('id'))
+                        continue
                     if nsr_new is not None:
                         result[nsrs.username].append(nsr_new)
 
