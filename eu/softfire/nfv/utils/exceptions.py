@@ -22,3 +22,7 @@ class NfvResourceProvisioningException(_BaseException):
 
 class MissingFileException(NfvResourceProvisioningException):
     pass
+
+
+class NfvManagerNotFoundException(_BaseException):
+    pass
