@@ -104,7 +104,9 @@ def _update_nsr(nsr):
         nsr_new = ob_client.get_nsr(nsr.id)
     except Exception as e:
         logger.error('Exception while fetching the NSR with ID {} of user {}. Does it really exist?'.format(nsr.id, nsr.username))
-        return None
+        raise NfvManagerNotFoundException(
+            'Exception while fetching the NSR with ID {} of user {}. Does it really exist?'.format(nsr.id,
+                                                                                                   nsr.username))
     try:
         nsr_new_dict = json.loads(nsr_new)
     except:
