@@ -564,9 +564,22 @@ class NfvManager(AbstractManager):
     def delete_user(self, user_info):
         logger.debug("Removing user %s" % user_info)
         username = user_info.name
-        os_utils.delete_tenant_and_user(username=username, testbed_tenants=user_info.testbed_tenants)
         ob_client = OBClient(username)
-        remove_all(ob_client, True)
+        try:
+            remove_all(ob_client, True)
+        except:
+            pass
         time.sleep(5)
-        ob_client.delete_user(username=username)
-        ob_client.delete_project(ob_project_id=user_info.ob_project_id)
+        try:
+            ob_client.delete_user(username=username)
+        except:
+            pass
+        try:
+            ob_client.delete_project(ob_project_id=user_info.ob_project_id)
+        except:
+            pass
+        time.sleep(2)
+        try:
+            os_utils.delete_tenant_and_user(username=username, testbed_tenants=user_info.testbed_tenants)
+        except:
+            pass
