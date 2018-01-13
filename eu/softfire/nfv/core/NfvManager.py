@@ -492,16 +492,14 @@ class NfvManager(AbstractManager):
            """
         ob_client = OBClient(user_info.name)
 
-        logger.info("Deleting resources for user: %s" % user_info.name)
-        logger.debug("Received this payload: %s" % payload)
-        nsr = None
+        logger.info('Deleting resources for user: {}'.format(user_info.name))
+        logger.debug('Received this payload: {}'.format(payload))
         try:
             nsr = json.loads(payload)
+            assert type(nsr) == dict
         except:
             logger.warning('Could not parse release resource payload to JSON: {}'.format(payload))
             traceback.print_exc()
-            if nsr:
-                remove_nsr_to_check(nsr.get('id'), True)
             return
         if nsr.get('type') == 'NfvResource' and nsr.get('properties') is not None:
             logger.debug('The payload does not seem to be an NSR so the resource was probably not yet deployed and nothing has to be removed from Open Baton.')
