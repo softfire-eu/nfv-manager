@@ -96,14 +96,18 @@ def _update_nsr(nsr):
     ob_client = OBClient(nsr.username)
     # check if the OBClient has a project ID. if not, something went wrong and the nsr is ignored for now.
     if ob_client.project_id is None:
-        logger.error('The OBClient for user {} has no project ID. This should never happen. Does the user still exist in Open Baton?'.format(nsr.username))
+        logger.error('The OBClient for user {} has no project ID. This should never happen. Does the user still exist '
+                     'in Open Baton?'.format(nsr.username))
         raise NfvManagerNotFoundException(
-            'The OBClient for user {} has no project ID. This should never happen. Does the user still exist in Open Baton?'.format(
+            'The OBClient for user {} has no project ID. This should never happen. Does the user still exist in Open '
+            'Baton?'.format(
                 nsr.username))
     try:
         nsr_new = ob_client.get_nsr(nsr.id)
     except Exception as e:
-        logger.error('Exception while fetching the NSR with ID {} of user {}. Does it really exist?'.format(nsr.id, nsr.username))
+        logger.error(
+            'Exception while fetching the NSR with ID {} of user {}. Removing it.'.format(nsr.id, nsr.username))
+        remove_nsr_to_check(nsr.id)
         raise NfvManagerNotFoundException(
             'Exception while fetching the NSR with ID {} of user {}. Does it really exist?'.format(nsr.id,
                                                                                                    nsr.username))
@@ -501,10 +505,11 @@ class NfvManager(AbstractManager):
             logger.warning('Could not parse release resource payload to JSON: {}'.format(payload))
             traceback.print_exc()
             if nsr:
-                remove_nsr_to_check(nsr.get('id'), True)
+                remove_nsr_to_check(nsr.get('id'))
             return
         if nsr.get('type') == 'NfvResource' and nsr.get('properties') is not None:
-            logger.debug('The payload does not seem to be an NSR so the resource was probably not yet deployed and nothing has to be removed from Open Baton.')
+            logger.debug('The payload does not seem to be an NSR so the resource was probably not yet deployed and '
+                         'nothing has to be removed from Open Baton.')
             return
         nsd_id = nsr.get('descriptor_reference')
         try:
