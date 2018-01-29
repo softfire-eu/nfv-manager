@@ -28,9 +28,9 @@ pip install nfv-manager
 
 and then start it with the `nfv-manager` command.
 
-Or you can run it from source code by cloning the git repository, installing the dependencies as specified in the [setup.py](https://github.com/softfire-eu/nfvexperiment-manager/blob/master/setup.py) file and executing the _nfv-manager_ script.
+Or you can run it from source code by cloning the git repository, installing the dependencies as specified in the [setup.py](https://github.com/softfire-eu/nfv-manager/blob/master/setup.py) file and executing the _nfv-manager_ script.
 
-The NFV Manager needs a configuration file present at _/etc/softfire/nfv-manager.ini_. An example of the configuration file can be found [here](https://github.com/softfire-eu/nfv-manager/blob/master/etc/nfvexperiment-manager.ini).
+The NFV Manager needs a configuration file present at _/etc/softfire/nfv-manager.ini_. An example of the configuration file can be found [here](https://github.com/softfire-eu/nfv-manager/blob/master/etc/nfv-manager.ini).
 
 ## Issue tracker
 

@@ -84,7 +84,7 @@ limitations under the License.
 .. _TU Berlin: http://www.av.tu-berlin.de/next_generation_networks/
 .. _Apache v2 License: http://www.apache.org/licenses/LICENSE-2.0
 .. _documentation: http://docs.softfire.eu/nfv-manager
-.. _setup.py: https://github.com/softfire-eu/nfvexperiment-manager/blob/master/setup.py
-.. _here: https://github.com/softfire-eu/nfv-manager/blob/master/etc/nfvexperiment-manager.ini
+.. _setup.py: https://github.com/softfire-eu/nfv-manager/blob/master/setup.py
+.. _here: https://github.com/softfire-eu/nfv-manager/blob/master/etc/nfv-manager.ini
 
 .. |image0| image:: http://docs.softfire.eu/img/nfv-manager.svg
