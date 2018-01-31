@@ -15,7 +15,7 @@ def read(fname):
 
 setup(
     name="nfv-manager",
-    version="1.3.2",
+    version="1.3.3",
     author="SoftFIRE",
     author_email="softfire@softfire.eu",
     description="The SoftFIRE NFV Manager",
@@ -27,12 +27,12 @@ setup(
     install_requires=[
         'asyncio',
         'grpcio',
-        'openbaton-cli',
+        'openbaton-cli==5.0.1',
         'python-keystoneclient',
         'python-neutronclient',
         'python-glanceclient',
         'python-novaclient',
-        'softfire-sdk',
+        'softfire-sdk==1.1.4',
         'sqlalchemy',
     ],
     long_description=read('README.rst'),
