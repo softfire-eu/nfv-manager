@@ -7,6 +7,7 @@ from os import listdir
 from os.path import isfile, join
 from threading import Thread
 
+import sys
 import yaml
 from org.openbaton.cli.errors.errors import NfvoException
 from org.openbaton.cli.openbaton import LIST_PRINT_KEY
@@ -169,6 +170,9 @@ def remove_all(ob_client, force=False):
 
 class NfvManager(AbstractManager):
     def __init__(self, config_file_path):
+        if not os.path.isfile(config_file_path):
+            logger.error('Configuration file {} is missing.'.format(config_file_path))
+            sys.exit(1)
         super().__init__(config_file_path)
         with open(self.get_config_value('system', 'softfire-public-key'), "r") as sosftfire_ssh_pub_key:
             self.softfire_pub_key = sosftfire_ssh_pub_key.read().strip()
